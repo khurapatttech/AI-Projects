@@ -3,11 +3,12 @@ import 'package:path/path.dart';
 import '../models/employee.dart';
 import '../models/attendance.dart';
 import '../models/payment.dart';
+import 'package:intl/intl.dart';
 
 class DatabaseService {
   static Database? _database;
   static const String _databaseName = 'household_staff.db';
-  static const int _databaseVersion = 1;
+  static const int _databaseVersion = 2; // Incremented from 1 to 2
 
   // Singleton pattern
   static final DatabaseService _instance = DatabaseService._internal();
@@ -21,6 +22,7 @@ class DatabaseService {
 
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), _databaseName);
+    print('Database path: ' + path); // Debug print for actual DB location
     return await openDatabase(
       path,
       version: _databaseVersion,
@@ -58,6 +60,8 @@ class DatabaseService {
         comments TEXT,
         marked_date TEXT NOT NULL,
         is_corrected INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
         FOREIGN KEY (employee_id) REFERENCES employees (id),
         UNIQUE(employee_id, date, shift_type)
       )
@@ -79,7 +83,18 @@ class DatabaseService {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Handle database migrations here in future versions
+    if (oldVersion < 2) {
+      // Check if columns already exist before adding
+      final columns = await db.rawQuery("PRAGMA table_info(attendance);");
+      final columnNames = columns.map((c) => c['name']).toSet();
+      if (!columnNames.contains('created_at')) {
+        await db.execute('ALTER TABLE attendance ADD COLUMN created_at TEXT;');
+      }
+      if (!columnNames.contains('updated_at')) {
+        await db.execute('ALTER TABLE attendance ADD COLUMN updated_at TEXT;');
+      }
+    }
+    // Future migrations go here
   }
 
   // Test database connection
@@ -136,7 +151,11 @@ class DatabaseService {
   // Attendance CRUD
   Future<int> insertAttendance(Attendance attendance) async {
     final db = await database;
-    return await db.insert('attendance', attendance.toMap(), conflictAlgorithm: ConflictAlgorithm.abort);
+    final now = DateTime.now().toIso8601String();
+    final data = attendance.toMap();
+    data['created_at'] = attendance.createdAt.isNotEmpty ? attendance.createdAt : now;
+    data['updated_at'] = attendance.updatedAt.isNotEmpty ? attendance.updatedAt : now;
+    return await db.insert('attendance', data, conflictAlgorithm: ConflictAlgorithm.abort);
   }
 
   Future<Attendance?> getAttendance(int id) async {
@@ -156,7 +175,10 @@ class DatabaseService {
 
   Future<int> updateAttendance(Attendance attendance) async {
     final db = await database;
-    return await db.update('attendance', attendance.toMap(), where: 'id = ?', whereArgs: [attendance.id]);
+    final now = DateTime.now().toIso8601String();
+    final data = attendance.toMap();
+    data['updated_at'] = now;
+    return await db.update('attendance', data, where: 'id = ?', whereArgs: [attendance.id]);
   }
 
   Future<int> deleteAttendance(int id) async {

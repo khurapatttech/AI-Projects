@@ -9,6 +9,8 @@ class Attendance {
   final String? comments;
   final String markedDate;
   final bool isCorrected;
+  final String createdAt;
+  final String updatedAt;
 
   Attendance({
     this.id,
@@ -21,6 +23,8 @@ class Attendance {
     this.comments,
     required this.markedDate,
     this.isCorrected = false,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +39,8 @@ class Attendance {
       'comments': comments,
       'marked_date': markedDate,
       'is_corrected': isCorrected ? 1 : 0,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
     };
   }
 
@@ -50,6 +56,8 @@ class Attendance {
       comments: map['comments'],
       markedDate: map['marked_date'],
       isCorrected: map['is_corrected'] == 1,
+      createdAt: map['created_at'],
+      updatedAt: map['updated_at'],
     );
   }
 } 

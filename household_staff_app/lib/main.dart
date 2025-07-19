@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
 import 'services/database_service.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'screens/employees/employees_screen.dart';
+import 'screens/attendance/attendance_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize FFI for desktop platforms
+  if (defaultTargetPlatform == TargetPlatform.windows ||
+      defaultTargetPlatform == TargetPlatform.linux ||
+      defaultTargetPlatform == TargetPlatform.macOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   final dbService = DatabaseService();
   final dbOk = await dbService.testConnection();
   if (dbOk) {
@@ -54,7 +66,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   static final List<Widget> _screens = <Widget>[
     Center(child: Text('Home Screen', style: TextStyle(fontSize: 24))),
-    Center(child: Text('Attendance Screen', style: TextStyle(fontSize: 24))),
+    AttendanceScreen(),
     EmployeesScreen(),
     Center(child: Text('Reports Screen', style: TextStyle(fontSize: 24))),
     Center(child: Text('Settings Screen', style: TextStyle(fontSize: 24))),

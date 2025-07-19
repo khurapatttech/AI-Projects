@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/employee.dart';
 import '../../services/database_service.dart';
 import 'employee_registration_screen.dart';
+import 'employee_detail_screen.dart';
 
 class EmployeesScreen extends StatefulWidget {
   const EmployeesScreen({Key? key}) : super(key: key);
@@ -64,7 +65,11 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                     title: Text(e.name),
                     subtitle: Text('Visits per day: \\${e.visitsPerDay}\nStatus: \\${e.activeStatus ? 'Active' : 'Inactive'}'),
                     onTap: () {
-                      // Placeholder for detail view
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EmployeeDetailScreen(employee: e),
+                        ),
+                      );
                     },
                   ),
                 );
