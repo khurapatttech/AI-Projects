@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatf
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'screens/employees/employees_screen.dart';
 import 'screens/attendance/attendance_screen.dart';
+import 'screens/dashboard/dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -168,7 +169,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
   static final List<Widget> _screens = <Widget>[
-    Center(child: Text('Home Screen', style: TextStyle(fontSize: 24))),
+    DashboardScreen(),
     AttendanceScreen(),
     EmployeesScreen(),
     Center(child: Text('Reports Screen', style: TextStyle(fontSize: 24))),
