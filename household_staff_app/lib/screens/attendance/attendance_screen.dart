@@ -286,121 +286,135 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final status = inEdit ? (_editStatus[key] ?? att?.status ?? 'present') : att?.status;
     // Fix: Always allow marking if within correction window and not off day, even if att is null (new employee)
     final allowMarking = canEdit && (att == null || inEdit);
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = MediaQuery.of(context).size.width < 600;
+        final padding = isMobile ? 10.0 : 12.0;
+        final fontSize = isMobile ? 12.0 : 13.0;
+        final timeFontSize = isMobile ? 10.0 : 11.0;
+        final buttonPadding = isMobile ? 8.0 : 12.0;
+        
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          margin: EdgeInsets.only(top: padding),
+          padding: EdgeInsets.all(padding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-                  const SizedBox(width: 8),
-                  Text(timeLabel, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.black87)),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(timeLabel, style: TextStyle(fontSize: timeFontSize, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (status != null)
+                    Chip(
+                      label: Text(status),
+                      backgroundColor: status == 'present' ? Colors.green.shade100 : Colors.red.shade100,
+                      avatar: Icon(
+                        status == 'present' ? Icons.check_circle : Icons.cancel,
+                        color: status == 'present' ? Colors.green : Colors.red,
+                        size: isMobile ? 14 : 16,
+                      ),
+                      labelStyle: TextStyle(fontSize: isMobile ? 10 : 12),
+                    ),
                 ],
               ),
-              if (status != null)
-                Chip(
-                  label: Text(status),
-                  backgroundColor: status == 'present' ? Colors.green.shade100 : Colors.red.shade100,
-                  avatar: Icon(
-                    status == 'present' ? Icons.check_circle : Icons.cancel,
-                    color: status == 'present' ? Colors.green : Colors.red,
-                    size: 16,
-                  ),
-                  labelStyle: const TextStyle(fontSize: 12),
+              const SizedBox(height: 8),
+              if (allowMarking)
+                Wrap(
+                  spacing: isMobile ? 6 : 8,
+                  runSpacing: 4,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: status == 'present' ? Colors.green : Colors.grey.shade200,
+                        foregroundColor: status == 'present' ? Colors.white : Colors.black87,
+                        padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        minimumSize: Size(isMobile ? 70 : 80, isMobile ? 32 : 36),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _editStatus[key] = 'present';
+                          _editMode[key] = true;
+                        });
+                      },
+                      child: Text('Present', style: TextStyle(fontSize: isMobile ? 11 : 12)),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: status == 'absent' ? Colors.red : Colors.grey.shade200,
+                        foregroundColor: status == 'absent' ? Colors.white : Colors.black87,
+                        padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        minimumSize: Size(isMobile ? 70 : 80, isMobile ? 32 : 36),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _editStatus[key] = 'absent';
+                          _editMode[key] = true;
+                        });
+                      },
+                      child: Text('Absent', style: TextStyle(fontSize: isMobile ? 11 : 12)),
+                    ),
+                    if (inEdit) ...[
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          minimumSize: Size(isMobile ? 60 : 70, isMobile ? 32 : 36),
+                        ),
+                        onPressed: () => _saveAttendance(e, shiftType, att),
+                        child: Text('Save', style: TextStyle(fontSize: isMobile ? 11 : 12)),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey.shade300,
+                          foregroundColor: Colors.black87,
+                          padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          minimumSize: Size(isMobile ? 60 : 70, isMobile ? 32 : 36),
+                        ),
+                        onPressed: () => _cancelEdit(e, shiftType),
+                        child: Text('Cancel', style: TextStyle(fontSize: isMobile ? 11 : 12)),
+                      ),
+                    ],
+                  ],
                 ),
+              if (inEdit) ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: commentController,
+                  decoration: InputDecoration(
+                    labelText: 'Comments',
+                    border: const OutlineInputBorder(),
+                    contentPadding: EdgeInsets.all(isMobile ? 8 : 12),
+                    labelStyle: TextStyle(fontSize: isMobile ? 12 : 14),
+                  ),
+                  style: TextStyle(fontSize: isMobile ? 12 : 14),
+                  maxLines: 2,
+                  enabled: inEdit || status == null,
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 8),
-          if (allowMarking)
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: status == 'present' ? Colors.green : Colors.grey.shade200,
-                    foregroundColor: status == 'present' ? Colors.white : Colors.black87,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    minimumSize: const Size(80, 36),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _editStatus[key] = 'present';
-                      _editMode[key] = true;
-                    });
-                  },
-                  child: const Text('Present'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: status == 'absent' ? Colors.red : Colors.grey.shade200,
-                    foregroundColor: status == 'absent' ? Colors.white : Colors.black87,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    minimumSize: const Size(80, 36),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _editStatus[key] = 'absent';
-                      _editMode[key] = true;
-                    });
-                  },
-                  child: const Text('Absent'),
-                ),
-                if (inEdit) ...[
-                  IconButton(
-                    icon: const Icon(Icons.check, color: Colors.green),
-                    tooltip: 'Save',
-                    onPressed: () => _saveAttendance(e, shiftType, att),
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(36, 36),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.red),
-                    tooltip: 'Cancel',
-                    onPressed: () => _cancelEdit(e, shiftType),
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(36, 36),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          if (!inEdit && status != null && canEdit && att != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                icon: const Icon(Icons.edit, size: 16, color: Colors.blue),
-                label: const Text('Edit', style: TextStyle(color: Colors.blue)),
-                onPressed: () => _startEdit(e, shiftType, att),
-              ),
-            ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: commentController,
-            decoration: const InputDecoration(
-              labelText: 'Comment',
-              isDense: true,
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-            minLines: 1,
-            maxLines: 2,
-            enabled: inEdit || status == null,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -456,40 +470,59 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   return Container(
                     width: double.infinity,
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    padding: EdgeInsets.symmetric(
+                      vertical: MediaQuery.of(context).size.width < 600 ? 8 : 12, 
+                      horizontal: 16
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.blue.shade100),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Column(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMobile = MediaQuery.of(context).size.width < 600;
+                        final fontSize = isMobile ? 16.0 : 18.0;
+                        final labelFontSize = isMobile ? 10.0 : 12.0;
+                        
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            Text('${employees.length}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue)),
-                            const Text('Total Staff', style: TextStyle(fontSize: 12)),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text('${employees.length}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.blue)),
+                                  Text('Total Staff', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text('$presentCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.green)),
+                                  Text('Present', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text('$absentCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.red)),
+                                  Text('Absent', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text('$pendingCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.orange)),
+                                  Text('Pending', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
                           ],
-                        ),
-                        Column(
-                          children: [
-                            Text('$presentCount', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
-                            const Text('Present', style: TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                        Column(
-                          children: [
-                            Text('$absentCount', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.red)),
-                            const Text('Absent', style: TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                        Column(
-                          children: [
-                            Text('$pendingCount', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.orange)),
-                            const Text('Pending', style: TextStyle(fontSize: 12)),
-                          ],
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   );
                 },
@@ -512,9 +545,18 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       label: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.calendar_today, size: 16, color: _selectedDate == d ? Colors.blue : Colors.grey),
+                          Icon(
+                            Icons.calendar_today, 
+                            size: MediaQuery.of(context).size.width < 600 ? 14 : 16, 
+                            color: _selectedDate == d ? Colors.blue : Colors.grey
+                          ),
                           const SizedBox(width: 4),
-                          Text(label),
+                          Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: MediaQuery.of(context).size.width < 600 ? 12 : 14,
+                            ),
+                          ),
                         ],
                       ),
                       selected: _selectedDate == d,
