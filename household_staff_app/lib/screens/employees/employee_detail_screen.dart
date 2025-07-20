@@ -10,8 +10,12 @@ class EmployeeDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     Employee employee = this.employee;
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         title: Text(employee.name),
+        elevation: 0,
+        backgroundColor: const Color(0xFF6366F1),
+        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.edit),

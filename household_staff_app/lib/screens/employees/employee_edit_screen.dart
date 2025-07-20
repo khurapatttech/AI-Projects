@@ -99,7 +99,13 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit Employee')),
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Edit Employee'),
+        elevation: 0,
+        backgroundColor: const Color(0xFF6366F1),
+        foregroundColor: Colors.white,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(

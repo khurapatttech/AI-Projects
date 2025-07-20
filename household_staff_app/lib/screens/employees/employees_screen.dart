@@ -40,7 +40,13 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Employees')),
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: const Text('Employees'),
+        elevation: 0,
+        backgroundColor: const Color(0xFF6366F1),
+        foregroundColor: Colors.white,
+      ),
       body: FutureBuilder<List<Employee>>(
         future: _employeesFuture,
         builder: (context, snapshot) {
