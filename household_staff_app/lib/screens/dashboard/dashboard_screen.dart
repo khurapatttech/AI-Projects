@@ -309,7 +309,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildStatCard(
           title: 'Active Staff',
           value: data.activeEmployees.toString(),
-          icon: Icons.person_check,
+          icon: Icons.person,
           color: const Color(0xFF10B981),
           theme: theme,
         ),
