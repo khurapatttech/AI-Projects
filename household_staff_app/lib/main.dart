@@ -168,13 +168,20 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  static final List<Widget> _screens = <Widget>[
-    DashboardScreen(),
-    AttendanceScreen(),
-    EmployeesScreen(),
-    Center(child: Text('Reports Screen', style: TextStyle(fontSize: 24))),
-    Center(child: Text('Settings Screen', style: TextStyle(fontSize: 24))),
-  ];
+  static final List<Widget> _screens = <Widget>[];
+  
+  List<Widget> _getScreens() {
+    return [
+      DashboardScreen(
+        onNavigateToAttendance: () => _onItemTapped(1),
+        onNavigateToEmployees: () => _onItemTapped(2),
+      ),
+      AttendanceScreen(),
+      EmployeesScreen(),
+      Center(child: Text('Reports Screen', style: TextStyle(fontSize: 24))),
+      Center(child: Text('Settings Screen', style: TextStyle(fontSize: 24))),
+    ];
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -184,9 +191,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screens = _getScreens();
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: _screens[_selectedIndex],
+      body: screens[_selectedIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,

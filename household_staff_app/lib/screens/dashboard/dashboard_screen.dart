@@ -5,7 +5,14 @@ import '../../models/attendance.dart';
 import '../../services/database_service.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({Key? key}) : super(key: key);
+  final VoidCallback? onNavigateToAttendance;
+  final VoidCallback? onNavigateToEmployees;
+  
+  const DashboardScreen({
+    Key? key, 
+    this.onNavigateToAttendance,
+    this.onNavigateToEmployees,
+  }) : super(key: key);
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -691,7 +698,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: 'Add Staff',
                   color: const Color(0xFF10B981),
                   onTap: () {
-                    // Navigate to add staff screen
+                    // Navigate to staff screen
+                    if (widget.onNavigateToEmployees != null) {
+                      widget.onNavigateToEmployees!();
+                    }
                   },
                 ),
               ),
@@ -703,6 +713,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: const Color(0xFF6366F1),
                   onTap: () {
                     // Navigate to attendance screen
+                    if (widget.onNavigateToAttendance != null) {
+                      widget.onNavigateToAttendance!();
+                    }
                   },
                 ),
               ),
@@ -717,7 +730,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: 'View Reports',
                   color: const Color(0xFF8B5CF6),
                   onTap: () {
-                    // Navigate to reports screen
+                    // Show placeholder for reports
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Reports feature coming soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -728,7 +747,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: 'Payments',
                   color: const Color(0xFF06B6D4),
                   onTap: () {
-                    // Navigate to payments screen
+                    // Show placeholder for payments
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Payments feature coming soon!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   },
                 ),
               ),

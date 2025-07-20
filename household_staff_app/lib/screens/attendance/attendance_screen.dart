@@ -174,11 +174,23 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Widget _employeeAttendanceCardModern(Employee e, Attendance? attFull, Attendance? attMorning, Attendance? attEvening, bool canEdit, bool isOff) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      color: isOff ? Colors.grey.shade100 : Colors.white,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+      decoration: BoxDecoration(
+        color: isOff ? Colors.grey.shade100 : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE2E8F0),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: isOff
@@ -309,7 +321,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
           const SizedBox(height: 8),
           if (allowMarking)
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -317,6 +331,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                     foregroundColor: status == 'present' ? Colors.white : Colors.black87,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    minimumSize: const Size(80, 36),
                   ),
                   onPressed: () {
                     setState(() {
@@ -326,13 +341,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   },
                   child: const Text('Present'),
                 ),
-                const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: status == 'absent' ? Colors.red : Colors.grey.shade200,
                     foregroundColor: status == 'absent' ? Colors.white : Colors.black87,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    minimumSize: const Size(80, 36),
                   ),
                   onPressed: () {
                     setState(() {
@@ -342,20 +357,24 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   },
                   child: const Text('Absent'),
                 ),
-                if (inEdit)
-                  ...[
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.check, color: Colors.green),
-                      tooltip: 'Save',
-                      onPressed: () => _saveAttendance(e, shiftType, att),
+                if (inEdit) ...[
+                  IconButton(
+                    icon: const Icon(Icons.check, color: Colors.green),
+                    tooltip: 'Save',
+                    onPressed: () => _saveAttendance(e, shiftType, att),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(36, 36),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.red),
-                      tooltip: 'Cancel',
-                      onPressed: () => _cancelEdit(e, shiftType),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    tooltip: 'Cancel',
+                    onPressed: () => _cancelEdit(e, shiftType),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(36, 36),
                     ),
-                  ],
+                  ),
+                ],
               ],
             ),
           if (!inEdit && status != null && canEdit && att != null)
@@ -374,6 +393,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               labelText: 'Comment',
               isDense: true,
               border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
             minLines: 1,
             maxLines: 2,
@@ -478,30 +498,34 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
           // Date selector
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_dateOptions.length, (i) {
-                final d = _dateOptions[i];
-                final label = i == 0 ? 'Today' : i == 1 ? 'Yesterday' : '${_dateOptions[i].day}/${_dateOptions[i].month}';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: ChoiceChip(
-                    label: Row(
-                      children: [
-                        Icon(Icons.calendar_today, size: 16, color: _selectedDate == d ? Colors.blue : Colors.grey),
-                        const SizedBox(width: 4),
-                        Text(label),
-                      ],
+            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_dateOptions.length, (i) {
+                  final d = _dateOptions[i];
+                  final label = i == 0 ? 'Today' : i == 1 ? 'Yesterday' : '${_dateOptions[i].day}/${_dateOptions[i].month}';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                    child: ChoiceChip(
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.calendar_today, size: 16, color: _selectedDate == d ? Colors.blue : Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(label),
+                        ],
+                      ),
+                      selected: _selectedDate == d,
+                      selectedColor: Colors.blue.shade100,
+                      onSelected: (selected) {
+                        if (selected) setState(() => _selectedDate = d);
+                      },
                     ),
-                    selected: _selectedDate == d,
-                    selectedColor: Colors.blue.shade100,
-                    onSelected: (selected) {
-                      if (selected) setState(() => _selectedDate = d);
-                    },
-                  ),
-                );
-              }),
+                  );
+                }),
+              ),
             ),
           ),
           // Employee cards
@@ -516,9 +540,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   builder: (context, attSnap) {
                     if (!attSnap.hasData) return const SizedBox.shrink();
                     final allAtt = attSnap.data!;
-                    return ListView(
-                      padding: const EdgeInsets.all(0),
-                      children: employees.map((e) {
+                    return ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: employees.length,
+                      itemBuilder: (context, index) {
+                        final e = employees[index];
                         Attendance? attFull, attMorning, attEvening;
                         try {
                           attFull = allAtt.firstWhere((a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == 'full_day');
@@ -537,8 +563,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         }
                         final isOff = _isOffDay(e);
                         final canEdit = _isWithinCorrectionWindow() && !isOff;
-                        return _employeeAttendanceCardModern(e, attFull, attMorning, attEvening, canEdit, isOff);
-                      }).toList(),
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _employeeAttendanceCardModern(e, attFull, attMorning, attEvening, canEdit, isOff),
+                        );
+                      },
                     );
                   },
                 );
