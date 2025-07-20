@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/employee.dart';
-import '../../models/attendance.dart';
+import '../../models/dashboard_data.dart';
 import '../../services/database_service.dart';
+import '../../utils/screen_size.dart';
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onNavigateToAttendance;
   final VoidCallback? onNavigateToEmployees;
   
   const DashboardScreen({
-    Key? key, 
+    Key? key,
     this.onNavigateToAttendance,
     this.onNavigateToEmployees,
   }) : super(key: key);
@@ -18,7 +19,10 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
+
+
 class _DashboardScreenState extends State<DashboardScreen> {
+  // Widget state
   late Future<DashboardData> _dashboardDataFuture;
 
   @override
@@ -120,57 +124,59 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<DashboardData>(
-        future: _dashboardDataFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
-              ),
-            );
-          }
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return FutureBuilder<DashboardData>(
+            future: _dashboardDataFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                  ),
+                );
+              }
           
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 64,
-                    color: Colors.red.shade300,
+              if (snapshot.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Colors.red.shade300,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error loading dashboard data',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: Colors.red.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        snapshot.error.toString(),
+                        style: theme.textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _loadDashboardData();
+                          });
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error loading dashboard data',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: Colors.red.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    snapshot.error.toString(),
-                    style: theme.textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _loadDashboardData();
-                      });
-                    },
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-            );
-          }
+                );
+              }
           
-          final data = snapshot.data!;
-          
-          return RefreshIndicator(
+              final data = snapshot.data!;
+              
+              return RefreshIndicator(
             onRefresh: () async {
               setState(() {
                 _loadDashboardData();
@@ -178,7 +184,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: ScreenSize.getScreenPadding(context),
+              clipBehavior: Clip.none,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -208,7 +215,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           );
-        },
+            },
+          );
+        }
       ),
     );
   }
@@ -259,11 +268,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 size: 28,
               ),
               const SizedBox(width: 12),
-              Text(
-                greeting,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
+              Flexible(
+                child: Text(
+                  greeting,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -284,10 +296,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 size: 16,
               ),
               const SizedBox(width: 8),
-              Text(
-                DateFormat('EEEE, MMMM dd, yyyy').format(now),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withOpacity(0.8),
+              Expanded(
+                child: Text(
+                  DateFormat('EEEE, MMMM dd, yyyy').format(now),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -298,43 +313,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildStatsGrid(DashboardData data, ThemeData theme) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.5,
-      children: [
-        _buildStatCard(
-          title: 'Total Staff',
-          value: data.totalEmployees.toString(),
-          icon: Icons.people,
-          color: const Color(0xFF06B6D4),
-          theme: theme,
-        ),
-        _buildStatCard(
-          title: 'Active Staff',
-          value: data.activeEmployees.toString(),
-          icon: Icons.person,
-          color: const Color(0xFF10B981),
-          theme: theme,
-        ),
-        _buildStatCard(
-          title: 'Present Today',
-          value: data.presentToday.toString(),
-          icon: Icons.check_circle,
-          color: const Color(0xFF059669),
-          theme: theme,
-        ),
-        _buildStatCard(
-          title: 'Pending',
-          value: data.pendingAttendance.toString(),
-          icon: Icons.pending_actions,
-          color: const Color(0xFFF59E0B),
-          theme: theme,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final isWide = width > 600;
+        final cardWidth = isWide ? width / 4 - 16 : width / 2 - 12;
+        final cardHeight = 120.0;
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: _buildStatCard(
+                  title: 'Total Staff',
+                  value: data.totalEmployees.toString(),
+                  icon: Icons.people,
+                  color: const Color(0xFF06B6D4),
+                  theme: theme,
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: _buildStatCard(
+                  title: 'Active Staff',
+                  value: data.activeEmployees.toString(),
+                  icon: Icons.person,
+                  color: const Color(0xFF10B981),
+                  theme: theme,
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: _buildStatCard(
+                  title: 'Present Today',
+                  value: data.presentToday.toString(),
+                  icon: Icons.check_circle,
+                  color: const Color(0xFF059669),
+                  theme: theme,
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: cardWidth,
+                height: cardHeight,
+                child: _buildStatCard(
+                  title: 'Pending',
+                  value: data.pendingAttendance.toString(),
+                  icon: Icons.pending_actions,
+                  color: const Color(0xFFF59E0B),
+                  theme: theme,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -345,32 +386,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required Color color,
     required ThemeData theme,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.maxWidth;
+        final minPadding = 12.0;
+        final maxPadding = 20.0;
+        final padding = (size * 0.08).clamp(minPadding, maxPadding);
+        final iconSize = (size * 0.18).clamp(22.0, 28.0);
+        
+        return Container(
+          padding: EdgeInsets.all(padding),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: const Color(0xFFE2E8F0),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: EdgeInsets.all(padding * 0.5),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -378,32 +423,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Icon(
                   icon,
                   color: color,
-                  size: 20,
+                  size: iconSize,
+                ),
+              ),
+              SizedBox(height: padding * 0.8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      value,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: (size * 0.14).clamp(16.0, 20.0),
+                        color: const Color(0xFF1E293B),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: padding * 0.3),
+                    Text(
+                      title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: (size * 0.10).clamp(11.0, 14.0),
+                        color: const Color(0xFF64748B),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF1E293B),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                title,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF64748B),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -898,36 +953,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class DashboardData {
-  final int totalEmployees;
-  final int activeEmployees;
-  final int presentToday;
-  final int absentToday;
-  final int pendingAttendance;
-  final List<DailyAttendanceData> weeklyAttendance;
-  final List<Employee> upcomingBirthdays;
-  final List<Attendance> recentAttendance;
-
-  DashboardData({
-    required this.totalEmployees,
-    required this.activeEmployees,
-    required this.presentToday,
-    required this.absentToday,
-    required this.pendingAttendance,
-    required this.weeklyAttendance,
-    required this.upcomingBirthdays,
-    required this.recentAttendance,
-  });
-}
-
-class DailyAttendanceData {
-  final String date;
-  final int present;
-  final int absent;
-
-  DailyAttendanceData({
-    required this.date,
-    required this.present,
-    required this.absent,
-  });
-}
