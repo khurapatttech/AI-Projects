@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatf
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'screens/employees/employees_screen.dart';
 import 'screens/attendance/attendance_screen.dart';
+import 'screens/home/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,11 @@ class HouseholdStaffApp extends StatelessWidget {
         ),
       ),
       home: const MainNavigationScreen(),
+      routes: {
+        '/home': (context) => const MainNavigationScreen(),
+        '/attendance': (context) => const AttendanceScreen(),
+        '/employees': (context) => const EmployeesScreen(),
+      },
       debugShowCheckedModeBanner: false,
     );
   }
@@ -64,18 +70,26 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  static final List<Widget> _screens = <Widget>[
-    Center(child: Text('Home Screen', style: TextStyle(fontSize: 24))),
-    AttendanceScreen(),
-    EmployeesScreen(),
-    Center(child: Text('Reports Screen', style: TextStyle(fontSize: 24))),
-    Center(child: Text('Settings Screen', style: TextStyle(fontSize: 24))),
-  ];
+  late final List<Widget> _screens;
 
-  void _onItemTapped(int index) {
+  @override
+  void initState() {
+    super.initState();
+    _screens = <Widget>[
+      HomeScreen(onNavigate: onItemTapped),
+      AttendanceScreen(),
+      EmployeesScreen(),
+    ];
+  }
+
+  void onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  void _onItemTapped(int index) {
+    onItemTapped(index);
   }
 
   @override
@@ -96,14 +110,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.people),
             label: 'Employees',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
-            label: 'Reports',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
-            label: 'Settings',
           ),
         ],
         currentIndex: _selectedIndex,

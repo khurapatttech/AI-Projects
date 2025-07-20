@@ -403,6 +403,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                   final allAtt = attSnap.data!;
                   int presentCount = 0, absentCount = 0, pendingCount = 0;
                   for (final e in employees) {
+                    // Skip counting if it's an off day for the employee
+                    if (_isOffDay(e)) continue;
+
                     if (e.visitsPerDay == 1) {
                       Attendance? att;
                       try {

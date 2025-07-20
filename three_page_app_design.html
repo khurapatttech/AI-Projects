@@ -1,0 +1,2641 @@
+        // Attendance System
+        let currentAttendanceDate = 'today';
+        let attendanceData = {
+            'today': {
+                'priya': { 'full_day': { status: null, comment: '' } },
+                'amit': { 'morning': { status: null, comment: '' }, 'evening': { status: null, comment: '' } },
+                'ravi': { 'full_day': { status: null, comment: '' } },
+                'maya': { 'morning': { status: null, comment: '' }, 'evening': { status: null, comment: '' } },
+                'sunita': { 'full_day': { status: 'off', comment: 'Off Day - Sunday' } }
+            },
+            'yesterday': {
+                'priya': { 'full_day': { status: 'present', comment: 'Finished work early, went to bank' } },
+                'amit': { 'morning': { status: 'present', comment: 'School drop completed' }, 'evening': { status: 'present', comment: 'Airport pickup done' } },
+                'ravi': { 'full_day': { status: 'present', comment: 'Watered all plants, trimmed bushes' } },
+                'maya': { 'morning': { status: 'present', comment: 'Kids ready for school' }, 'evening': { status: 'absent', comment: 'Family emergency' } },
+                'sunita': { 'full_day': { status: 'present', comment: 'Prepared lunch and dinner' } }
+            },
+            'day-before': {
+                'priya': { 'full_day': { status: 'present', comment: 'Deep cleaned kitchen and bathrooms' } },
+                'amit': { 'morning': { status: 'present', comment: 'Morning duties completed' }, 'evening': { status: 'absent', comment: 'Not available' } },
+                'ravi': { 'full_day': { status: 'absent', comment: 'Family emergency, had to leave early' } },
+                'maya': { 'morning': { status: 'present', comment: 'Morning shift completed' }, 'evening': { status: 'present', comment: 'Evening duties done' } },
+                'sunita': { 'full_day': { status: 'present', comment: 'Cooked all meals' } }
+            }
+        };
+
+        function selectAttendanceDate(dateKey, element) {
+            // Remove selected class from all chips
+            document.querySelectorAll('.date-chip').forEach(chip => {
+                chip.classList.remove('selected');
+            });
+            
+            // Handle custom date picker
+            if (dateKey === 'custom') {
+                document.getElementById('custom-date-section').classList.remove('hidden');
+                const today = new Date();
+                const maxDate = today.toISOString().split('T')[0];
+                const minDate = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]; // 30 days ago
+                
+                document.getElementById('custom-date-picker').max = maxDate;
+                document.getElementById('custom-date-picker').min = minDate;
+                document.getElementById('custom-date-picker').value = maxDate;
+                return;
+            } else {
+                document.getElementById('custom-date-section').classList.add('hidden');
+                element.classList.add('selected');
+            }
+            
+            currentAttendanceDate = dateKey;
+            updateAttendanceDisplay();
+            updateTimeWindow();
+            updateSelectedDateDisplay(dateKey);
+        }
+
+        function hideCustomDatePicker() {
+            document.getElementById('custom-date-section').classList.add('hidden');
+            // Re-select the current date
+            const currentChip = document.querySelector(`.date-chip[onclick*="${currentAttendanceDate}"]`);
+            if (currentChip) {
+                currentChip.classList.add('selected');
+            }
+        }
+
+        function applyCustomDate() {
+            const selectedDate = document.getElementById('custom-date-picker').value;
+            const dateObj = new Date(selectedDate);
+            const today = new Date();
+            
+            // Calculate days difference
+            const diffTime = today.getTime() - dateObj.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) {
+                showFeedback('Cannot select future dates', 'error');
+                return;
+            }
+            
+            if (diffDays > 30) {
+                showFeedback('Cannot select dates older than 30 days', 'error');
+                return;
+            }
+            
+            // Create custom date key
+            const customKey = `custom-${selectedDate}`;
+            
+            // Initialize data for custom date if not exists
+            if (!attendanceData[customKey]) {
+                attendanceData[customKey] = {
+                    'priya': { 'full_day': { status: null, comment: '' } },
+                    'amit': { 'morning': { status: null, comment: '' }, 'evening': { status: null, comment: '' } },
+                    'ravi': { 'full_day': { status: null, comment: '' } },
+                    'maya': { 'morning': { status: null, comment: '' }, 'evening': { status: null, comment: '' } },
+                    'sunita': { 'full_day': { status: getOffDayStatus(dateObj), comment: getOffDayStatus(dateObj) === 'off' ? 'Off Day' : '' } }
+                };
+            }
+            
+            currentAttendanceDate = customKey;
+            hideCustomDatePicker();
+            updateAttendanceDisplay();
+            updateTimeWindow();
+            updateSelectedDateDisplay(customKey, dateObj);
+            
+            showFeedback(`Loaded attendance for ${dateObj.toLocaleDateString('en-IN')}`, 'info');
+        }
+
+        function getOffDayStatus(date) {
+            // Sunday is off day for Sunita
+            return date.getDay() === 0 ? 'off' : null;
+        }
+
+        function updateSelectedDateDisplay(dateKey, customDate = null) {
+            const displayElement = document.getElementById('selected-date-display');
+            
+            if (customDate) {
+                displayElement.textContent = customDate.toLocaleDateString('en-IN', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+            } else {
+                const displays = {
+                    'today': 'Today, July 20, 2025',
+                    'yesterday': 'Yesterday, July 19, 2025', 
+                    'day-before': 'July 18, 2025'
+                };
+                displayElement.textContent = displays[dateKey] || dateKey;
+            }
+        }
+
+        function updateTimeWindow() {
+            const windowTitle = document.getElementById('window-title');
+            const windowSubtitle = document.getElementById('window-subtitle');
+            const timeWindow = document.getElementById('time-window');
+            
+            if (currentAttendanceDate === 'today') {
+                const now = new Date();
+                const hour = now.getHours();
+                const minute = now.getMinutes();
+                
+                if (hour < 11 || (hour === 11 && minute <= 50)) {
+                    windowTitle.textContent = 'Morning Window Active';
+                    windowSubtitle.textContent = 'Available until 11:50 AM';
+                    timeWindow.style.background = 'linear-gradient(135deg, #4caf50, #45a049)';
+                } else if (hour >= 15) {
+                    windowTitle.textContent = 'Evening Window Active';
+                    windowSubtitle.textContent = 'Available until 8:00 PM';
+                    timeWindow.style.background = 'linear-gradient(135deg, #ff9800, #f57c00)';
+                } else {
+                    windowTitle.textContent = 'Transition Period';
+                    windowSubtitle.textContent = 'Evening window opens at 3:00 PM';
+                    timeWindow.style.background = 'linear-gradient(135deg, #f44336, #d32f2f)';
+                }
+            } else {
+                windowTitle.textContent = 'Historical Data';
+                windowSubtitle.textContent = 'Past attendance records';
+                timeWindow.style.background = 'linear-gradient(135deg, #2196F3, #1976D2)';
+            }
+        }
+
+        function updateAttendanceDisplay() {
+            const data = attendanceData[currentAttendanceDate] || {};
+            
+            // Update each employee card
+            Object.keys(data).forEach(employeeId => {
+                const card = document.querySelector(`[data-employee="${employeeId}"]`);
+                if (!card) return;
+                
+                const employeeData = data[employeeId];
+                const statusBadge = card.querySelector('[data-status]');
+                
+                // Calculate overall status for this employee
+                const statuses = Object.values(employeeData).map(shift => shift.status).filter(s => s !== null);
+                let overallStatus = 'pending';
+                
+                if (statuses.includes('off')) {
+                    overallStatus = 'off';
+                } else if (statuses.length === 0) {
+                    overallStatus = 'pending';
+                } else if (statuses.every(s => s === 'present')) {
+                    overallStatus = 'present';
+                } else if (statuses.every(s => s === 'absent')) {
+                    overallStatus = 'absent';
+                } else if (statuses.includes('present') && statuses.includes('absent')) {
+                    overallStatus = 'partial';
+                } else {
+                    overallStatus = statuses[0];
+                }
+                
+                // Update status badge
+                statusBadge.className = `status-badge status-${overallStatus}`;
+                const statusTexts = {
+                    'present': 'Present',
+                    'absent': 'Absent', 
+                    'partial': 'Partial',
+                    'pending': 'Pending',
+                    'off': 'Off Day'
+                };
+                statusBadge.textContent = statusTexts[overallStatus];
+                
+                // Update each shift in the card
+                Object.keys(employeeData).forEach(shiftType => {
+                    const shiftData = employeeData[shiftType];
+                    const commentInput = card.querySelector(`[data-shift="${shiftType}"]`);
+                    
+                    if (commentInput) {
+                        commentInput.value = shiftData.comment || '';
+                        
+                        // Update buttons for this shift
+                        const shiftSection = commentInput.closest('.shift-section');
+                        const buttons = shiftSection.querySelectorAll('.attendance-buttons .btn');
+                        
+                        // Reset buttons
+                        buttons.forEach(btn => {
+                            btn.style.background = '#e0e0e0';
+                            btn.style.color = '#999';
+                            btn.disabled = false;
+                        });
+                        
+                        // Set active button based on status
+                        if (shiftData.status === 'present') {
+                            buttons[0].style.background = '#4caf50';
+                            buttons[0].style.color = 'white';
+                        } else if (shiftData.status === 'absent') {
+                            buttons[1].style.background = '#f44336';
+                            buttons[1].style.color = 'white';
+                        } else if (shiftData.status === 'off') {
+                            buttons.forEach(btn => {
+                                btn.disabled = true;
+                                btn.style.background = '#f5f5f5';
+                                btn.style.color = '#ccc';
+                            });
+                        }
+                    }
+                });
+            });
+            
+            updateSummaryStats();
+        }
+
+        function updateSummaryStats() {
+            const data = attendanceData[currentAttendanceDate] || {};
+            let totalShifts = 0, presentCount = 0, absentCount = 0, pendingCount = 0;
+            
+            Object.values(data).forEach(employeeData => {
+                Object.values(employeeData).forEach(shiftData => {
+                    if (shiftData.status !== 'off') {
+                        totalShifts++;
+                        if (shiftData.status === 'present') presentCount++;
+                        else if (shiftData.status === 'absent') absentCount++;
+                        else pendingCount++;
+                    }
+                });
+            });
+            
+            document.getElementById('total-shifts').textContent = totalShifts;
+            document.getElementById('present-count').textContent = presentCount;
+            document.getElementById('absent-count').textContent = absentCount;
+            document.getElementById('pending-count').textContent = pendingCount;
+        }
+
+        function markAttendance(employeeId, shiftType, status, buttonElement) {
+            // Initialize data structure if needed
+            if (!attendanceData[currentAttendanceDate]) {
+                attendanceData[currentAttendanceDate] = {};
+            }
+            if (!attendanceData[currentAttendanceDate][employeeId]) {
+                attendanceData[currentAttendanceDate][employeeId] = {};
+            }
+            if (!attendanceData[currentAttendanceDate][employeeId][shiftType]) {
+                attendanceData[currentAttendanceDate][employeeId][shiftType] = { status: null, comment: '' };
+            }
+            
+            // Update attendance data
+            attendanceData[currentAttendanceDate][employeeId][shiftType].status = status;
+            
+            // Update comment from textarea
+            const commentInput = document.querySelector(`[data-employee="${employeeId}"][data-shift="${shiftType}"]`);
+            if (commentInput) {
+                attendanceData[currentAttendanceDate][employeeId][shiftType].comment = commentInput.value;
+            }
+            
+            // Update button styling
+            const shiftSection = buttonElement.closest('.shift-section');
+            const buttons = shiftSection.querySelectorAll('.attendance-buttons .btn');
+            
+            // Reset all buttons in this shift
+            buttons.forEach(btn => {
+                btn.style.background = '#e0e0e0';
+                btn.style.color = '#999';
+            });
+            
+            // Highlight selected button
+            if (status === 'present') {
+                buttonElement.style.background = '#4caf50';
+                buttonElement.style.color = 'white';
+            } else if (status === 'absent') {
+                buttonElement.style.background = '#f44336';
+                buttonElement.style.color = 'white';
+            }
+            
+            // Update overall attendance display
+            updateAttendanceDisplay();
+            
+            showFeedback(`Attendance marked: ${status.charAt(0).toUpperCase() + status.slice(1)}`, 'success');
+        }
+
+        // Save comments when user types
+        function setupCommentSaving() {
+            document.querySelectorAll('.comment-input').forEach(input => {
+                input.addEventListener('blur', function() {
+                    const employeeId = this.dataset.employee;
+                    const shiftType = this.dataset.shift;
+                    
+                    if (employeeId && shiftType && attendanceData[currentAttendanceDate] && 
+                        attendanceData[currentAttendanceDate][employeeId] && 
+                        attendanceData[currentAttendanceDate][employeeId][shiftType]) {
+                        attendanceData[currentAttendanceDate][employeeId][shiftType].comment = this.value;
+                    }
+                });
+            });
+        }
+
+        // Initialize attendance page
+        function initializeAttendancePage() {
+            // Set today as default selected
+            const todayChip = document.querySelector('.date-chip');
+            if (todayChip) {
+                todayChip.classList.add('selected');
+            }
+            
+            updateAttendanceDisplay();
+            updateTimeWindow();
+            updateSelectedDateDisplay('today');
+            setupCommentSaving();
+            
+            // Update time window every minute
+            setInterval(updateTimeWindow, 60000);
+        }                            <div class="attendance-buttons">
+                                <button class="btn btn-present">Present</button>
+                                <button class="btn" style="background: #e0e0e0; color: #666;">Absent</button>
+                            </div>
+                            <textarea class="comment-input" placeholder="Comments (optional)" rows="2">Completed all cleaning tasks</textarea>
+                        </div>
+                    </div>
+
+                    <!-- Twice Daily Employee -->
+                    <div class="attendance-card">
+                        <div class="card-header">
+                            <div class="employee-avatar">A</div>
+                            <div class="employee-info">
+                                <div class="employee-name">Amit Singh</div>
+                                <div class="employee-role">Twice Daily • Driver</div>
+                            </div>
+                            <div class="status-badge status-present">Partial</div>
+                        </div>
+                        
+                        <!-- Morning Shift -->
+                        <div class="shift-section">
+                            <div class="shift-header">
+                                <div class="shift-label">Morning Shift</div>
+                                <div class="shift-time">7:00-11:50 AM</div>
+                            </div>
+                            <div class="attendance-buttons">
+                                <button class="btn btn-present">Present</button>
+                                <button class="btn" style="background: #e0e0e0; color: #666;">Absent</button>
+                            </div>
+                            <textarea class="comment-input" placeholder="Comments (optional)" rows="1">Dropped kids to school</textarea>
+                        </div>
+                        
+                        <!-- Evening Shift -->
+                        <div class="shift-section" style="border-top: 1px solid #e0e0e0;">
+                            <div class="shift-header">
+                                <div class="shift-label">Evening Shift</div>
+                                <div class="shift-time">3:00-8:00 PM</div>
+                            </div>
+                            <div class="attendance-buttons">
+                                <button class="btn btn-disabled">Present</button>
+                                <button class="btn btn-disabled">Absent</button>
+                            </div>
+                            <textarea class="comment-input" placeholder="Comments (optional)" rows="1" disabled></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Absent Employee -->
+                    <div class="attendance-card">
+                        <div class="card-header">
+                            <div class="employee-avatar">R</div>
+                            <div class="employee-info">
+                                <div class="employee-name">Ravi Kumar</div>
+                                <div class="employee-role">Daily • Gardening</div>
+                            </div>
+                            <div class="status-badge status-absent">Absent</div>
+                        </div>
+                        
+                        <div class="shift-section">
+                            <div class="shift-header">
+                                <div class="shift-label">Today's Attendance</div>
+                                <div class="shift-time">Full Day</div>
+                            </div>
+                            <div class="attendance-buttons">
+                                <button class="btn" style="background: #e0e0e0; color: #666;">Present</button>
+                                <button class="btn btn-absent">Absent</button>
+                            </div>
+                            <textarea class="comment-input" placeholder="Comments (optional)" rows="2">Called in sick</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EMPLOYEES PAGE -->
+            <div id="employees-page" class="hidden">
+                <div class="employee-list">
+                    <!-- Employee 1 -->
+                    <div class="employee-card">
+                        <div class="employee-header">
+                            <div class="employee-avatar">P</div>
+                            <div class="employee-info">
+                                <div class="employee-name">Priya Sharma</div>
+                                <div class="employee-role">House Cleaning • Daily</div>
+                            </div>
+                            <div class="status-badge status-present">Active</div>
+                        </div>
+                        
+                        <div class="employee-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Phone:</span>
+                                <span class="detail-value">+91 98765 43210</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Monthly Salary:</span>
+                                <span class="detail-value">₹15,000</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Visits per day:</span>
+                                <span class="detail-value">1 (Daily)</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Off Days:</span>
+                                <span class="detail-value">Sunday</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Joined:</span>
+                                <span class="detail-value">Jan 15, 2025</span>
+                            </div>
+                        </div>
+                        
+                        <div class="employee-actions">
+                            <button class="action-btn" onclick="showEditEmployee('Priya Sharma')">📝 Edit</button>
+                            <button class="action-btn" onclick="showQuickAdvance('Priya Sharma', 'priya')">⚡ Advance</button>
+                            <button class="action-btn" onclick="showPaymentHistory('Priya Sharma')">💰 Payments</button>
+                        </div>
+                    </div>
+
+                    <!-- Employee 2 -->
+                    <div class="employee-card">
+                        <div class="employee-header">
+                            <div class="employee-avatar">A</div>
+                            <div class="employee-info">
+                                <div class="employee-name">Amit Singh</div>
+                                <div class="employee-role">Driver • Twice Daily</div>
+                            </div>
+                            <div class="status-badge status-present">Active</div>
+                        </div>
+                        
+                        <div class="employee-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Phone:</span>
+                                <span class="detail-value">+91 87654 32109</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Monthly Salary:</span>
+                                <span class="detail-value">₹18,000</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Visits per day:</span>
+                                <span class="detail-value">2 (Morning & Evening)</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Off Days:</span>
+                                <span class="detail-value">Monday</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Joined:</span>
+                                <span class="detail-value">Mar 01, 2025</span>
+                            </div>
+                        </div>
+                        
+                        <div class="employee-actions">
+                            <button class="action-btn" onclick="showEditEmployee('Amit Singh')">📝 Edit</button>
+                            <button class="action-btn" onclick="showQuickAdvance('Amit Singh', 'amit')">⚡ Advance</button>
+                            <button class="action-btn" onclick="showPaymentHistory('Amit Singh')">💰 Payments</button>
+                        </div>
+                    </div>
+
+                    <!-- Additional employees... -->
+                    <div class="employee-card">
+                        <div class="employee-header">
+                            <div class="employee-avatar">R</div>
+                            <div class="employee-info">
+                                <div class="employee-name">Ravi Kumar</div>
+                                <div class="employee-role">Gardening • Daily</div>
+                            </div>
+                            <div class="status-badge status-present">Active</div>
+                        </div>
+                        
+                        <div class="employee-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Phone:</span>
+                                <span class="detail-value">+91 76543 21098</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Monthly Salary:</span>
+                                <span class="detail-value">₹12,000</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Visits per day:</span>
+                                <span class="detail-value">1 (Daily)</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Off Days:</span>
+                                <span class="detail-value">Sunday</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Joined:</span>
+                                <span class="detail-value">Feb 10, 2025</span>
+                            </div>
+                        </div>
+                        
+                        <div class="employee-actions">
+                            <button class="action-btn" onclick="showEditEmployee('Ravi Kumar')">📝 Edit</button>
+                            <button class="action-btn" onclick="showQuickAdvance('Ravi Kumar', 'ravi')">⚡ Advance</button>
+                            <button class="action-btn" onclick="showPaymentHistory('Ravi Kumar')">💰 Payments</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADD EMPLOYEE FORM -->
+            <div id="add-employee-page" class="hidden">
+                <div class="form-container">
+                    <div class="form-group">
+                        <label class="form-label">Full Name *</label>
+                        <input type="text" class="form-input" placeholder="Enter employee name" id="emp-name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Age *</label>
+                        <input type="number" class="form-input" placeholder="Enter age (18-70)" id="emp-age" min="18" max="70">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Phone Number *</label>
+                        <input type="tel" class="form-input" placeholder="+91 XXXXX XXXXX" id="emp-phone">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Email (Optional)</label>
+                        <input type="email" class="form-input" placeholder="employee@example.com" id="emp-email">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Monthly Salary (₹) *</label>
+                        <input type="number" class="form-input" placeholder="Enter monthly salary" id="emp-salary" min="1000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Visits per Day *</label>
+                        <div class="radio-group">
+                            <div class="radio-item selected" onclick="selectVisits(1, this)">
+                                <span>📅</span>
+                                <span>Once Daily</span>
+                            </div>
+                            <div class="radio-item" onclick="selectVisits(2, this)">
+                                <span>📅📅</span>
+                                <span>Twice Daily</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Weekly Off Days *</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item" onclick="toggleOffDay('Monday', this)">
+                                <span>📅</span>
+                                <span>Monday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Tuesday', this)">
+                                <span>📅</span>
+                                <span>Tuesday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Wednesday', this)">
+                                <span>📅</span>
+                                <span>Wednesday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Thursday', this)">
+                                <span>📅</span>
+                                <span>Thursday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Friday', this)">
+                                <span>📅</span>
+                                <span>Friday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Saturday', this)">
+                                <span>📅</span>
+                                <span>Saturday</span>
+                            </div>
+                            <div class="checkbox-item selected" onclick="toggleOffDay('Sunday', this)">
+                                <span>📅</span>
+                                <span>Sunday</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-buttons">
+                        <button class="btn-secondary" onclick="goBack()">Cancel</button>
+                        <button class="btn-primary" onclick="saveEmployee()">Save Employee</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EDIT EMPLOYEE FORM -->
+            <div id="edit-employee-page" class="hidden">
+                <div class="form-container">
+                    <div class="form-group">
+                        <label class="form-label">Full Name *</label>
+                        <input type="text" class="form-input" value="Priya Sharma" id="edit-emp-name">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Age *</label>
+                        <input type="number" class="form-input" value="28" id="edit-emp-age" min="18" max="70">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Phone Number *</label>
+                        <input type="tel" class="form-input" value="+91 98765 43210" id="edit-emp-phone">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Email (Optional)</label>
+                        <input type="email" class="form-input" value="priya@example.com" id="edit-emp-email">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Monthly Salary (₹) *</label>
+                        <input type="number" class="form-input" value="15000" id="edit-emp-salary" min="1000">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Visits per Day *</label>
+                        <div class="radio-group">
+                            <div class="radio-item selected" onclick="selectVisits(1, this)">
+                                <span>📅</span>
+                                <span>Once Daily</span>
+                            </div>
+                            <div class="radio-item" onclick="selectVisits(2, this)">
+                                <span>📅📅</span>
+                                <span>Twice Daily</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Weekly Off Days *</label>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item" onclick="toggleOffDay('Monday', this)">
+                                <span>📅</span>
+                                <span>Monday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Tuesday', this)">
+                                <span>📅</span>
+                                <span>Tuesday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Wednesday', this)">
+                                <span>📅</span>
+                                <span>Wednesday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Thursday', this)">
+                                <span>📅</span>
+                                <span>Thursday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Friday', this)">
+                                <span>📅</span>
+                                <span>Friday</span>
+                            </div>
+                            <div class="checkbox-item" onclick="toggleOffDay('Saturday', this)">
+                                <span>📅</span>
+                                <span>Saturday</span>
+                            </div>
+                            <div class="checkbox-item selected" onclick="toggleOffDay('Sunday', this)">
+                                <span>📅</span>
+                                <span>Sunday</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-buttons">
+                        <button class="btn-secondary" onclick="goBack()">Cancel</button>
+                        <button class="btn-primary" onclick="updateEmployee()">Update Employee</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAYMENT HISTORY PAGE -->
+            <div id="payment-history-page" class="hidden">
+                <div class="monthly-summary">
+                    <h3 style="margin-bottom: 16px; color: #333;">Priya Sharma - Payment Summary</h3>
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">₹15,000</div>
+                            <div class="summary-stat-label">Monthly Salary</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">₹12,000</div>
+                            <div class="summary-stat-label">Paid This Month</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">₹3,000</div>
+                            <div class="summary-stat-label">Outstanding</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">80%</div>
+                            <div class="summary-stat-label">Payment Rate</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="padding: 0 20px;">
+                    <h4 style="margin-bottom: 12px; color: #333;">Recent Payments</h4>
+                </div>
+
+                <div class="payment-item">
+                    <div class="payment-header">
+                        <div class="payment-amount">₹8,000</div>
+                        <div class="payment-type">Salary</div>
+                    </div>
+                    <div class="payment-details">
+                        <div>Date: July 15, 2025</div>
+                        <div>Method: Bank Transfer</div>
+                        <div>Notes: Monthly salary payment</div>
+                    </div>
+                </div>
+
+                <div class="payment-item">
+                    <div class="payment-header">
+                        <div class="payment-amount">₹2,000</div>
+                        <div class="payment-type" style="background: #fff3e0; color: #f57c00;">Advance</div>
+                    </div>
+                    <div class="payment-details">
+                        <div>Date: July 10, 2025</div>
+                        <div>Method: Cash</div>
+                        <div>Notes: Festival advance</div>
+                    </div>
+                </div>
+
+                <div class="payment-item">
+                    <div class="payment-header">
+                        <div class="payment-amount">₹2,000</div>
+                        <div class="payment-type" style="background: #fff3e0; color: #f57c00;">Advance</div>
+                    </div>
+                    <div class="payment-details">
+                        <div>Date: July 05, 2025</div>
+                        <div>Method: UPI</div>
+                        <div>Notes: Medical emergency</div>
+                    </div>
+                </div>
+
+                <div class="payment-item">
+                    <div class="payment-header">
+                        <div class="payment-amount">₹15,000</div>
+                        <div class="payment-type">Salary</div>
+                    </div>
+                    <div class="payment-details">
+                        <div>Date: June 30, 2025</div>
+                        <div>Method: Bank Transfer</div>
+                        <div>Notes: June salary - full payment</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ATTENDANCE HISTORY PAGE -->
+            <div id="attendance-history-page" class="hidden">
+                <div class="monthly-summary">
+                    <h3 style="margin-bottom: 16px; color: #333;">Priya Sharma - July 2025</h3>
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">20</div>
+                            <div class="summary-stat-label">Days Present</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">1</div>
+                            <div class="summary-stat-label">Days Absent</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">95.2%</div>
+                            <div class="summary-stat-label">Attendance Rate</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">4</div>
+                            <div class="summary-stat-label">Off Days</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calendar-grid">
+                    <div class="calendar-day calendar-header">Mon</div>
+                    <div class="calendar-day calendar-header">Tue</div>
+                    <div class="calendar-day calendar-header">Wed</div>
+                    <div class="calendar-day calendar-header">Thu</div>
+                    <div class="calendar-day calendar-header">Fri</div>
+                    <div class="calendar-day calendar-header">Sat</div>
+                    <div class="calendar-day calendar-header">Sun</div>
+                    
+                    <!-- Week 1 -->
+                    <div class="calendar-day calendar-present">1</div>
+                    <div class="calendar-day calendar-present">2</div>
+                    <div class="calendar-day calendar-present">3</div>
+                    <div class="calendar-day calendar-present">4</div>
+                    <div class="calendar-day calendar-present">5</div>
+                    <div class="calendar-day calendar-present">6</div>
+                    <div class="calendar-day calendar-off">7</div>
+                    
+                    <!-- Week 2 -->
+                    <div class="calendar-day calendar-present">8</div>
+                    <div class="calendar-day calendar-present">9</div>
+                    <div class="calendar-day calendar-present">10</div>
+                    <div class="calendar-day calendar-present">11</div>
+                    <div class="calendar-day calendar-absent">12</div>
+                    <div class="calendar-day calendar-present">13</div>
+                    <div class="calendar-day calendar-off">14</div>
+                    
+                    <!-- Week 3 -->
+                    <div class="calendar-day calendar-present">15</div>
+                    <div class="calendar-day calendar-present">16</div>
+                    <div class="calendar-day calendar-present">17</div>
+                    <div class="calendar-day calendar-present">18</div>
+                    <div class="calendar-day calendar-present">19</div>
+                    <div class="calendar-day calendar-present calendar-today">20</div>
+                    <div class="calendar-day calendar-off">21</div>
+                    
+                    <!-- Week 4 -->
+                    <div class="calendar-day" style="color: #ccc;">22</div>
+                    <div class="calendar-day" style="color: #ccc;">23</div>
+                    <div class="calendar-day" style="color: #ccc;">24</div>
+                    <div class="calendar-day" style="color: #ccc;">25</div>
+                    <div class="calendar-day" style="color: #ccc;">26</div>
+                    <div class="calendar-day" style="color: #ccc;">27</div>
+                    <div class="calendar-day calendar-off" style="color: #ccc;">28</div>
+                    
+                    <!-- Week 5 -->
+                    <div class="calendar-day" style="color: #ccc;">29</div>
+                    <div class="calendar-day" style="color: #ccc;">30</div>
+                    <div class="calendar-day" style="color: #ccc;">31</div>
+                </div>
+            </div>
+
+            <!-- MONTHLY REPORT PAGE -->
+            <div id="monthly-report-page" class="hidden">
+                <div class="monthly-summary">
+                    <h3 style="margin-bottom: 16px; color: #333;">Monthly Report - July 2025</h3>
+                    <div class="summary-stats">
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">86.3%</div>
+                            <div class="summary-stat-label">Overall Attendance</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">₹71,000</div>
+                            <div class="summary-stat-label">Total Paid</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">5</div>
+                            <div class="summary-stat-label">Active Staff</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-number">₹11,500</div>
+                            <div class="summary-stat-label">Outstanding</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="today-attendance">
+                    <div class="section-header">
+                        <span>Performance Rankings</span>
+                        <span style="font-size: 12px; color: #666;">This Month</span>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div style="background: #ffd700; color: #b8860b;" class="employee-avatar">🏆</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Priya Sharma</div>
+                            <div class="employee-role">20/21 days • 95.2%</div>
+                        </div>
+                        <div class="status-badge" style="background: #ffd700; color: #b8860b;">Excellent</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div style="background: #c0c0c0; color: #696969;" class="employee-avatar">🥈</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Amit Singh</div>
+                            <div class="employee-role">35/40 shifts • 87.5%</div>
+                        </div>
+                        <div class="status-badge" style="background: #e3f2fd; color: #1976d2;">Good</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div style="background: #cd7f32; color: #8b4513;" class="employee-avatar">🥉</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Sunita Devi</div>
+                            <div class="employee-role">18/21 days • 85.7%</div>
+                        </div>
+                        <div class="status-badge" style="background: #e3f2fd; color: #1976d2;">Good</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div class="employee-avatar">M</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Maya Patel</div>
+                            <div class="employee-role">30/40 shifts • 75.0%</div>
+                        </div>
+                        <div class="status-badge" style="background: #fff3e0; color: #f57c00;">Fair</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div class="employee-avatar">R</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Ravi Kumar</div>
+                            <div class="employee-role">16/21 days • 76.2%</div>
+                        </div>
+                        <div class="status-badge" style="background: #fff3e0; color: #f57c00;">Fair</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div class="bottom-nav">
+            <div class="nav-item active" onclick="switchPage('home')">
+                <span class="nav-icon">🏠</span>
+                <div class="nav-text">Home</div>
+            </div>
+            <div class="nav-item" onclick="switchPage('attendance')">
+                <span class="nav-icon">📝</span>
+                <div class="nav-text">Attendance</div>
+            </div>
+            <div class="nav-item" onclick="switchPage('employees')">
+                <span class="nav-icon">👥</span>
+                <div class="nav-text">Employees</div>
+            </div>
+        </div>
+
+        <!-- Floating Action Button -->
+        <button class="fab hidden" id="fab-button" onclick="showAddEmployee()">+</button>
+    </div>
+
+    <!-- Quick Advance Modal -->
+    <div class="modal-overlay" id="advance-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">⚡ Quick Advance Payment</div>
+            </div>
+            <div class="modal-body">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="font-size: 48px; margin-bottom: 8px;">💸</div>
+                    <h3 id="advance-employee-name" style="color: #333;">Employee Name</h3>
+                    <p style="color: #666; font-size: 14px;">Record advance payment quickly</p>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Advance Amount (₹) *</label>
+                    <input type="number" class="form-input" placeholder="Enter advance amount" id="advance-amount" min="100" style="font-size: 18px; text-align: center;">
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button onclick="setAdvanceAmount(1000)" style="flex: 1; padding: 8px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer;">₹1,000</button>
+                        <button onclick="setAdvanceAmount(2000)" style="flex: 1; padding: 8px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer;">₹2,000</button>
+                        <button onclick="setAdvanceAmount(3000)" style="flex: 1; padding: 8px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer;">₹3,000</button>
+                        <button onclick="setAdvanceAmount(5000)" style="flex: 1; padding: 8px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer;">₹5,000</button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Payment Method *</label>
+                    <select class="form-select" id="advance-method">
+                        <option value="cash">💵 Cash</option>
+                        <option value="upi">📱 UPI</option>
+                        <option value="bank">🏦 Bank Transfer</option>
+                        <option value="other">📄 Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Reason for Advance</label>
+                    <select class="form-select" id="advance-reason" onchange="updateAdvanceNotes()">
+                        <option value="">Select reason (optional)</option>
+                        <option value="medical">🏥 Medical Emergency</option>
+                        <option value="festival">🎉 Festival/Celebration</option>
+                        <option value="family">👨‍👩‍👧‍👦 Family Emergency</option>
+                        <option value="education">📚 Education/School Fees</option>
+                        <option value="travel">✈️ Travel/Transportation</option>
+                        <option value="personal">👤 Personal Need</option>
+                        <option value="other">📝 Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Notes (Optional)</label>
+                    <textarea class="form-input" placeholder="Add any additional notes..." id="advance-notes" rows="2"></textarea>
+                </div>
+                
+                <div style="background: #fff3e0; padding: 12px; border-radius: 8px; margin: 16px 0; border-left: 4px solid #ff9800;">
+                    <div style="font-size: 12px; color: #f57c00;">
+                        <strong>💡 Note:</strong> Advance payments will be deducted from future salary payments.
+                    </div>
+                </div>
+                
+                <div class="form-buttons">
+                    <button class="btn-secondary" onclick="hideAdvanceForm()">Cancel</button>
+                    <button class="btn-primary" onclick="saveAdvancePayment()" style="background: #ff9800;">Record Advance</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-overlay" id="payment-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Record Payment</div>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Employee *</label>
+                    <select class="form-select" id="payment-employee">
+                        <option value="">Select Employee</option>
+                        <option value="priya">Priya Sharma</option>
+                        <option value="amit">Amit Singh</option>
+                        <option value="ravi">Ravi Kumar</option>
+                        <option value="maya">Maya Patel</option>
+                        <option value="sunita">Sunita Devi</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Payment Type *</label>
+                    <div class="radio-group">
+                        <div class="radio-item selected" onclick="selectPaymentType('salary', this)">
+                            <span>💰</span>
+                            <span>Salary</span>
+                        </div>
+                        <div class="radio-item" onclick="selectPaymentType('advance', this)">
+                            <span>⚡</span>
+                            <span>Advance</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Amount (₹) *</label>
+                    <input type="number" class="form-input" placeholder="Enter amount" id="payment-amount" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Payment Date *</label>
+                    <input type="date" class="form-input" id="payment-date" value="2025-07-20">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Payment Method *</label>
+                    <select class="form-select" id="payment-method">
+                        <option value="cash">Cash</option>
+                        <option value="bank">Bank Transfer</option>
+                        <option value="upi">UPI</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Notes (Optional)</label>
+                    <textarea class="form-input" placeholder="Add any notes..." id="payment-notes" rows="3"></textarea>
+                </div>
+                
+                <div class="form-buttons">
+                    <button class="btn-secondary" onclick="hidePaymentForm()">Cancel</button>
+                    <button class="btn-primary" onclick="savePayment()">Record Payment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentPage = 'home';
+        let pageHistory = [];
+        let selectedVisits = 1;
+        let selectedOffDays = ['Sunday'];
+
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            document.getElementById('current-time').textContent = timeString;
+        }
+
+        // Page navigation
+        function switchPage(page) {
+            // Hide all pages
+            document.querySelectorAll('[id$="-page"]').forEach(p => p.classList.add('hidden'));
+            
+            // Remove active class from all nav items
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Show selected page and update navigation
+            if (page === 'home') {
+                document.getElementById('home-page').classList.remove('hidden');
+                document.querySelector('.nav-item:nth-child(1)').classList.add('active');
+                updateHeader('Dashboard', 'Household Staff Management');
+                hideBackButton();
+                hideFab();
+            } else if (page === 'attendance') {
+                document.getElementById('attendance-page').classList.remove('hidden');
+                document.querySelector('.nav-item:nth-child(2)').classList.add('active');
+                updateHeader('Attendance', 'Mark daily attendance');
+                hideBackButton();
+                hideFab();
+            } else if (page === 'employees') {
+                document.getElementById('employees-page').classList.remove('hidden');
+                document.querySelector('.nav-item:nth-child(3)').classList.add('active');
+                updateHeader('Employees', 'Manage staff details');
+                hideBackButton();
+                showFab();
+            }
+            
+            currentPage = page;
+            pageHistory = [page];
+            
+            // Add slide-in animation
+            document.querySelector('.content').classList.add('slide-in');
+            setTimeout(() => {
+                document.querySelector('.content').classList.remove('slide-in');
+            }, 300);
+        }
+
+        function navigateToPage(page, title, subtitle) {
+            // Hide all pages
+            document.querySelectorAll('[id$="-page"]').forEach(p => p.classList.add('hidden'));
+            
+            // Show target page
+            document.getElementById(page + '-page').classList.remove('hidden');
+            
+            // Update header
+            updateHeader(title, subtitle);
+            showBackButton();
+            hideFab();
+            
+            // Update page history
+            pageHistory.push(currentPage);
+            currentPage = page;
+            
+            // Add animation
+            document.querySelector('.content').classList.add('slide-in');
+            setTimeout(() => {
+                document.querySelector('.content').classList.remove('slide-in');
+            }, 300);
+        }
+
+        function goBack() {
+            if (pageHistory.length > 0) {
+                const previousPage = pageHistory.pop();
+                switchPage(previousPage);
+            } else {
+                switchPage('home');
+            }
+        }
+
+        function updateHeader(title, subtitle) {
+            document.getElementById('page-title').textContent = title;
+            document.getElementById('page-subtitle').textContent = subtitle;
+        }
+
+        function showBackButton() {
+            document.getElementById('back-button').classList.remove('hidden');
+        }
+
+        function hideBackButton() {
+            document.getElementById('back-button').classList.add('hidden');
+        }
+
+        function showFab() {
+            document.getElementById('fab-button').classList.remove('hidden');
+        }
+
+        function hideFab() {
+            document.getElementById('fab-button').classList.add('hidden');
+        }
+
+        // Employee form functions
+        function showAddEmployee() {
+            navigateToPage('add-employee', 'Add Employee', 'Enter employee details');
+        }
+
+        function showEditEmployee(name) {
+            navigateToPage('edit-employee', 'Edit Employee', 'Update employee details');
+        }
+
+        function showPaymentHistory(name) {
+            navigateToPage('payment-history', 'Payment History', name + ' - Payment records');
+        }
+
+        function showAttendanceHistory(name) {
+            navigateToPage('attendance-history', 'Attendance History', name + ' - Attendance calendar');
+        }
+
+        function showMonthlyReport() {
+            navigateToPage('monthly-report', 'Monthly Report', 'Performance analytics');
+        }
+
+        // Form interaction functions
+        function selectVisits(visits, element) {
+            document.querySelectorAll('.radio-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            selectedVisits = visits;
+        }
+
+        function toggleOffDay(day, element) {
+            if (element.classList.contains('selected')) {
+                element.classList.remove('selected');
+                selectedOffDays = selectedOffDays.filter(d => d !== day);
+            } else {
+                element.classList.add('selected');
+                selectedOffDays.push(day);
+            }
+        }
+
+        function saveEmployee() {
+            const name = document.getElementById('emp-name').value;
+            const age = document.getElementById('emp-age').value;
+            const phone = document.getElementById('emp-phone').value;
+            const salary = document.getElementById('emp-salary').value;
+            
+            if (!name || !age || !phone || !salary || selectedOffDays.length === 0) {
+                showFeedback('Please fill all required fields', 'error');
+                return;
+            }
+            
+            showFeedback('Employee saved successfully!', 'success');
+            setTimeout(() => {
+                switchPage('employees');
+            }, 1500);
+        }
+
+        function updateEmployee() {
+            showFeedback('Employee updated successfully!', 'success');
+            setTimeout(() => {
+                switchPage('employees');
+            }, 1500);
+        }
+
+        // Quick Advance functions
+        let currentAdvanceEmployee = null;
+        let currentAdvanceEmployeeId = null;
+
+        function showQuickAdvance(employeeName, employeeId) {
+            currentAdvanceEmployee = employeeName;
+            currentAdvanceEmployeeId = employeeId;
+            
+            document.getElementById('advance-employee-name').textContent = employeeName;
+            document.getElementById('advance-amount').value = '';
+            document.getElementById('advance-reason').value = '';
+            document.getElementById('advance-notes').value = '';
+            document.getElementById('advance-method').value = 'cash';
+            
+            document.getElementById('advance-modal').classList.add('show');
+        }
+
+        function hideAdvanceForm() {
+            document.getElementById('advance-modal').classList.remove('show');
+            currentAdvanceEmployee = null;
+            currentAdvanceEmployeeId = null;
+        }
+
+        function setAdvanceAmount(amount) {
+            document.getElementById('advance-amount').value = amount;
+        }
+
+        function updateAdvanceNotes() {
+            const reason = document.getElementById('advance-reason').value;
+            const notesField = document.getElementById('advance-notes');
+            
+            const reasonTexts = {
+                'medical': 'Medical emergency - advance for treatment expenses',
+                'festival': 'Festival celebration - advance for festival preparations',
+                'family': 'Family emergency - urgent financial need',
+                'education': 'Education expenses - school/college fees payment',
+                'travel': 'Travel expenses - transportation costs',
+                'personal': 'Personal financial requirement',
+                'other': ''
+            };
+            
+            if (reason && reasonTexts[reason]) {
+                notesField.value = reasonTexts[reason];
+            }
+        }
+
+        function saveAdvancePayment() {
+            const amount = document.getElementById('advance-amount').value;
+            const method = document.getElementById('advance-method').value;
+            const reason = document.getElementById('advance-reason').value;
+            const notes = document.getElementById('advance-notes').value;
+            
+            if (!amount || amount <= 0) {
+                showFeedback('Please enter a valid advance amount', 'error');
+                return;
+            }
+            
+            if (amount > 10000) {
+                showFeedback('Advance amount cannot exceed ₹10,000', 'error');
+                return;
+            }
+            
+            const reasonText = reason ? document.getElementById('advance-reason').options[document.getElementById('advance-reason').selectedIndex].text : 'General advance';
+            const methodText = document.getElementById('advance-method').options[document.getElementById('advance-method').selectedIndex].text;
+            
+            hideAdvanceForm();
+            
+            // Show detailed advance confirmation
+            const advanceConfirmation = document.createElement('div');
+            advanceConfirmation.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 24px;
+                border-radius: 16px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 1001;
+                max-width: 320px;
+                text-align: center;
+                border-left: 4px solid #ff9800;
+            `;
+            
+            advanceConfirmation.innerHTML = `
+                <div style="color: #ff9800; font-size: 48px; margin-bottom: 16px;">⚡</div>
+                <h3 style="color: #333; margin-bottom: 16px;">Advance Payment Recorded!</h3>
+                <div style="text-align: left; font-size: 14px; color: #666; margin-bottom: 20px;">
+                    <div><strong>Employee:</strong> ${currentAdvanceEmployee}</div>
+                    <div><strong>Amount:</strong> ₹${Number(amount).toLocaleString('en-IN')}</div>
+                    <div><strong>Method:</strong> ${methodText}</div>
+                    <div><strong>Reason:</strong> ${reasonText}</div>
+                    <div><strong>Date:</strong> ${new Date().toLocaleDateString('en-IN')}</div>
+                    ${notes ? `<div><strong>Notes:</strong> ${notes}</div>` : ''}
+                </div>
+                <div style="background: #fff3e0; padding: 10px; border-radius: 6px; margin-bottom: 16px; font-size: 12px; color: #f57c00;">
+                    💡 This advance will be deducted from future salary payments
+                </div>
+                <button onclick="this.parentElement.remove()" style="
+                    background: #ff9800;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    width: 100%;
+                ">OK</button>
+            `;
+            
+            document.body.appendChild(advanceConfirmation);
+            
+            // Auto-close after 6 seconds
+            setTimeout(() => {
+                if (advanceConfirmation.parentElement) {
+                    advanceConfirmation.remove();
+                }
+            }, 6000);
+        }
+        function showPaymentForm() {
+            // Reset form
+            document.getElementById('payment-employee').value = '';
+            document.getElementById('payment-amount').value = '';
+            document.getElementById('payment-notes').value = '';
+            
+            // Show modal
+            document.getElementById('payment-modal').classList.add('show');
+        }
+
+        function hidePaymentForm() {
+            document.getElementById('payment-modal').classList.remove('show');
+        }
+
+        function selectPaymentType(type, element) {
+            document.querySelectorAll('#payment-modal .radio-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            
+            // Auto-fill amount based on employee and payment type
+            const employeeSelect = document.getElementById('payment-employee');
+            const amountInput = document.getElementById('payment-amount');
+            
+            if (employeeSelect.value && type === 'salary') {
+                const salaries = {
+                    'priya': 15000,
+                    'amit': 18000,
+                    'ravi': 12000,
+                    'maya': 20000,
+                    'sunita': 16000
+                };
+                amountInput.value = salaries[employeeSelect.value] || '';
+                amountInput.placeholder = 'Monthly salary: ₹' + (salaries[employeeSelect.value] || '0');
+            } else {
+                amountInput.value = '';
+                amountInput.placeholder = 'Enter advance amount';
+            }
+        }
+
+        // Update payment amount when employee is selected
+        document.getElementById('payment-employee').addEventListener('change', function() {
+            const selectedType = document.querySelector('#payment-modal .radio-item.selected');
+            if (selectedType && selectedType.textContent.includes('Salary')) {
+                selectPaymentType('salary', selectedType);
+            }
+        });
+
+        function savePayment() {
+            const employee = document.getElementById('payment-employee').value;
+            const amount = document.getElementById('payment-amount').value;
+            const date = document.getElementById('payment-date').value;
+            const method = document.getElementById('payment-method').value;
+            const notes = document.getElementById('payment-notes').value;
+            const paymentType = document.querySelector('#payment-modal .radio-item.selected').textContent.toLowerCase().includes('salary') ? 'Salary' : 'Advance';
+            
+            if (!employee || !amount || !date || !method) {
+                showFeedback('Please fill all required fields', 'error');
+                return;
+            }
+            
+            if (amount <= 0) {
+                showFeedback('Amount must be greater than 0', 'error');
+                return;
+            }
+            
+            // Show detailed confirmation
+            const employeeNames = {
+                'priya': 'Priya Sharma',
+                'amit': 'Amit Singh', 
+                'ravi': 'Ravi Kumar',
+                'maya': 'Maya Patel',
+                'sunita': 'Sunita Devi'
+            };
+            
+            const confirmationMessage = `Payment Recorded Successfully!\n\n` +
+                `Employee: ${employeeNames[employee]}\n` +
+                `Type: ${paymentType}\n` +
+                `Amount: ₹${amount}\n` +
+                `Method: ${method}\n` +
+                `Date: ${new Date(date).toLocaleDateString('en-IN')}\n` +
+                `${notes ? `Notes: ${notes}` : ''}`;
+            
+            hidePaymentForm();
+            
+            // Show detailed success message
+            const detailedFeedback = document.createElement('div');
+            detailedFeedback.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 24px;
+                border-radius: 16px;
+                box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+                z-index: 1001;
+                max-width: 300px;
+                text-align: center;
+                border-left: 4px solid #4caf50;
+            `;
+            
+            detailedFeedback.innerHTML = `
+                <div style="color: #4caf50; font-size: 48px; margin-bottom: 16px;">✅</div>
+                <h3 style="color: #333; margin-bottom: 16px;">Payment Recorded!</h3>
+                <div style="text-align: left; font-size: 14px; color: #666; margin-bottom: 20px;">
+                    <div><strong>Employee:</strong> ${employeeNames[employee]}</div>
+                    <div><strong>Type:</strong> ${paymentType}</div>
+                    <div><strong>Amount:</strong> ₹${Number(amount).toLocaleString('en-IN')}</div>
+                    <div><strong>Method:</strong> ${method}</div>
+                    <div><strong>Date:</strong> ${new Date(date).toLocaleDateString('en-IN')}</div>
+                    ${notes ? `<div><strong>Notes:</strong> ${notes}</div>` : ''}
+                </div>
+                <button onclick="this.parentElement.remove()" style="
+                    background: #4caf50;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: bold;
+                ">OK</button>
+            `;
+            
+            document.body.appendChild(detailedFeedback);
+            
+            // Auto-close after 5 seconds
+            setTimeout(() => {
+                if (detailedFeedback.parentElement) {
+                    detailedFeedback.remove();
+                }
+            }, 5000);
+        }
+
+        // Attendance interaction - Updated
+        function updateAttendanceForDate(dateLabel) {
+            // This function is now replaced by the new attendance system
+            // keeping for backward compatibility
+        }
+
+        // Initialize attendance when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeAttendancePage();
+        });
+
+        // Feedback system
+        function showFeedback(message, type = 'success') {
+            const feedback = document.createElement('div');
+            feedback.style.cssText = `
+                position: fixed;
+                bottom: 120px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: ${type === 'success' ? '#4caf50' : type === 'info' ? '#2196F3' : '#f44336'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 24px;
+                font-size: 14px;
+                z-index: 1000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: slideUp 0.3s ease;
+            `;
+            feedback.textContent = message;
+            
+            document.body.appendChild(feedback);
+            
+            setTimeout(() => {
+                feedback.style.animation = 'slideDown 0.3s ease';
+                setTimeout(() => feedback.remove(), 300);
+            }, 2500);
+        }
+
+        // Modal click outside to close
+        document.getElementById('payment-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                hidePaymentForm();
+            }
+        });
+
+        document.getElementById('advance-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                hideAdvanceForm();
+            }
+        });
+
+        // Animation styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideUp {
+                from { transform: translateX(-50%) translateY(100%); opacity: 0; }
+                to { transform: translateX(-50%) translateY(0); opacity: 1; }
+            }
+            @keyframes slideDown {
+                from { transform: translateX(-50%) translateY(0); opacity: 1; }
+                to { transform: translateX(-50%) translateY(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Touch feedback for mobile
+        document.querySelectorAll('.action-card, .nav-item, .btn, .action-btn, .employee-card').forEach(element => {
+            element.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.95)';
+            });
+            
+            element.addEventListener('touchend', function() {
+                this.style.transform = 'scale(1)';
+            });
+        });
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === '1') switchPage('home');
+            if (e.key === '2') switchPage('attendance');
+            if (e.key === '3') switchPage('employees');
+            if (e.key === 'Escape') {
+                if (document.getElementById('payment-modal').classList.contains('show')) {
+                    hidePaymentForm();
+                } else if (document.getElementById('advance-modal').classList.contains('show')) {
+                    hideAdvanceForm();
+                } else {
+                    goBack();
+                }
+            }
+        });
+
+        // Initialize app
+        updateTime();
+        setInterval(updateTime, 60000);
+        initializeAttendancePage();
+
+        // Set default date for payment form
+        document.getElementById('payment-date').value = new Date().toISOString().split('T')[0];
+
+        console.log('🏠 Complete Household Staff Management App Loaded');
+        console.log('📱 Features: Employee Management, Attendance Tracking, Payment Recording');
+        console.log('⌨️  Keyboard: 1=Home, 2=Attendance, 3=Employees, Esc=Back/Close');
+        console.log('📅 Attendance: Select different dates to view/edit historical data');
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Household Staff Management App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .phone-container {
+            max-width: 375px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            height: 700px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-header {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .app-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .app-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .back-button {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+
+        .back-button:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .bottom-nav {
+            background: white;
+            display: flex;
+            border-top: 1px solid #e0e0e0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        .nav-item {
+            flex: 1;
+            padding: 12px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-item.active {
+            background: #e3f2fd;
+            color: #2196F3;
+        }
+
+        .nav-item:not(.active) {
+            color: #666;
+        }
+
+        .nav-icon {
+            font-size: 20px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .nav-text {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        /* Form Styles */
+        .form-container {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .checkbox-item.selected {
+            background: #e3f2fd;
+            border-color: #2196F3;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .radio-item.selected {
+            background: #e3f2fd;
+            border-color: #2196F3;
+        }
+
+        .form-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .btn-primary {
+            flex: 1;
+            padding: 14px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #1976D2;
+        }
+
+        .btn-secondary {
+            flex: 1;
+            padding: 14px;
+            background: #f5f5f5;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        /* Home Page Styles */
+        .dashboard-stats {
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+
+        .stat-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .today-attendance {
+            margin: 0 20px 20px 20px;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .section-header {
+            background: #f8f9fa;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            font-weight: bold;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .employee-row {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+        }
+
+        .employee-row:last-child {
+            border-bottom: none;
+        }
+
+        .employee-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e3f2fd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #2196F3;
+            margin-right: 12px;
+        }
+
+        .employee-info {
+            flex: 1;
+        }
+
+        .employee-name {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 2px;
+        }
+
+        .employee-role {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .status-present {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .status-absent {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .status-pending {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .status-off {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .quick-actions {
+            padding: 20px;
+        }
+
+        .action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .action-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .action-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .action-text {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Attendance Page Styles */
+        .time-window {
+            background: linear-gradient(135deg, #4caf50, #45a049);
+            color: white;
+            padding: 16px 20px;
+            text-align: center;
+        }
+
+        .window-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .window-subtitle {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .date-selector {
+            background: white;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+        }
+
+        .date-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            background: white;
+            font-size: 12px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .date-chip.selected {
+            background: #e3f2fd;
+            border-color: #2196F3;
+            color: #2196F3;
+        }
+
+        .attendance-summary {
+            background: #e3f2fd;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+        }
+
+        .summary-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .summary-number {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1976d2;
+        }
+
+        .summary-label {
+            font-size: 11px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .attendance-card {
+            background: white;
+            margin: 12px 20px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+        }
+
+        .shift-section {
+            padding: 16px 20px;
+            background: #f8f9fa;
+        }
+
+        .shift-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .shift-label {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .shift-time {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .attendance-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-present {
+            background: #4caf50;
+            color: white;
+        }
+
+        .btn-absent {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-disabled {
+            background: #e0e0e0;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        .comment-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 12px;
+            resize: none;
+        }
+
+        /* Employee Page Styles */
+        .employee-list {
+            padding: 20px;
+        }
+
+        .employee-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+        }
+
+        .employee-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .employee-details {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .detail-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-label {
+            color: #666;
+        }
+
+        .detail-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .employee-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #2196F3;
+            border-radius: 6px;
+            background: white;
+            color: #2196F3;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: #2196F3;
+            color: white;
+        }
+
+        /* Payment History Styles */
+        .payment-item {
+            background: white;
+            margin: 12px 20px;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #2196F3;
+        }
+
+        .payment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .payment-amount {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .payment-type {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .payment-details {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Attendance History Styles */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            padding: 16px 20px;
+            background: white;
+            margin: 12px 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .calendar-day {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .calendar-header {
+            font-weight: bold;
+            color: #666;
+            cursor: default;
+        }
+
+        .calendar-present {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .calendar-absent {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .calendar-off {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .calendar-today {
+            border: 2px solid #2196F3;
+        }
+
+        .fab {
+            position: fixed;
+            bottom: 80px;
+            right: 30px;
+            width: 56px;
+            height: 56px;
+            background: #2196F3;
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .fab:hover {
+            transform: scale(1.1);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .time-indicator {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            margin: 20px;
+            max-width: 350px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            transform: scale(0.8);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            color: white;
+            padding: 20px;
+            border-radius: 16px 16px 0 0;
+            text-align: center;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        /* Animation classes */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        /* Monthly Summary */
+        .monthly-summary {
+            background: white;
+            margin: 12px 20px;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .summary-stat {
+            text-align: center;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .summary-stat-number {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+
+        .summary-stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="phone-container">
+        <!-- Header -->
+        <div class="app-header">
+            <button class="back-button hidden" id="back-button" onclick="goBack()">←</button>
+            <div class="time-indicator" id="current-time">10:30 AM</div>
+            <div class="app-title" id="page-title">Dashboard</div>
+            <div class="app-subtitle" id="page-subtitle">Household Staff Management</div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content">
+            <!-- HOME PAGE -->
+            <div id="home-page">
+                <!-- Dashboard Stats -->
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <span class="stat-icon" style="color: #2196F3;">👥</span>
+                        <div class="stat-number" style="color: #2196F3;">5</div>
+                        <div class="stat-label">Total Staff</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon" style="color: #4CAF50;">✅</span>
+                        <div class="stat-number" style="color: #4CAF50;">3</div>
+                        <div class="stat-label">Present Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon" style="color: #f44336;">❌</span>
+                        <div class="stat-number" style="color: #f44336;">1</div>
+                        <div class="stat-label">Absent Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon" style="color: #FF9800;">⏳</span>
+                        <div class="stat-number" style="color: #FF9800;">1</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                </div>
+
+                <!-- Today's Attendance -->
+                <div class="today-attendance">
+                    <div class="section-header">
+                        <span>Today's Attendance</span>
+                        <span style="font-size: 12px; color: #666;">July 20, 2025</span>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div class="employee-avatar">P</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Priya Sharma</div>
+                            <div class="employee-role">House Cleaning • Daily</div>
+                        </div>
+                        <div class="status-badge status-present">Present</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div class="employee-avatar">A</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Amit Singh</div>
+                            <div class="employee-role">Driver • Twice Daily</div>
+                        </div>
+                        <div class="status-badge status-present">Morning ✓</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div class="employee-avatar">R</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Ravi Kumar</div>
+                            <div class="employee-role">Gardening • Daily</div>
+                        </div>
+                        <div class="status-badge status-absent">Absent</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div class="employee-avatar">M</div>
+                        <div class="employee-info">
+                            <div class="employee-name">Maya Patel</div>
+                            <div class="employee-role">Child Care • Twice Daily</div>
+                        </div>
+                        <div class="status-badge status-pending">Pending</div>
+                    </div>
+                    
+                    <div class="employee-row">
+                        <div class="employee-avatar" style="background: #f5f5f5; color: #666;">S</div>
+                        <div class="employee-info">
+                            <div class="employee-name" style="color: #666;">Sunita Devi</div>
+                            <div class="employee-role">Cooking • Daily</div>
+                        </div>
+                        <div class="status-badge status-off">Off Day</div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="quick-actions">
+                    <div class="section-header" style="background: transparent; padding: 0 0 16px 0; border: none;">
+                        Quick Actions
+                    </div>
+                    <div class="action-grid">
+                        <div class="action-card" onclick="switchPage('attendance')">
+                            <span class="action-icon" style="color: #4CAF50;">📝</span>
+                            <div class="action-text">Mark Attendance</div>
+                        </div>
+                        <div class="action-card" onclick="switchPage('employees')">
+                            <span class="action-icon" style="color: #2196F3;">👤</span>
+                            <div class="action-text">Manage Staff</div>
+                        </div>
+                        <div class="action-card" onclick="showPaymentForm()">
+                            <span class="action-icon" style="color: #FF9800;">💰</span>
+                            <div class="action-text">Record Payment</div>
+                        </div>
+                        <div class="action-card" onclick="showMonthlyReport()">
+                            <span class="action-icon" style="color: #9C27B0;">📊</span>
+                            <div class="action-text">Monthly Report</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ATTENDANCE PAGE -->
+            <div id="attendance-page" class="hidden">
+                <!-- Time Window Indicator -->
+                <div class="time-window">
+                    <div class="window-title">Morning Window Active</div>
+                    <div class="window-subtitle">Available until 11:50 AM</div>
+                </div>
+
+                <!-- Date Selector -->
+                <div class="date-selector">
+                    <div class="date-chip selected">
+                        <span>📅</span>
+                        <span>Today</span>
+                    </div>
+                    <div class="date-chip">
+                        <span>📅</span>
+                        <span>Yesterday</span>
+                    </div>
+                    <div class="date-chip">
+                        <span>📅</span>
+                        <span>Jul 18</span>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="attendance-summary">
+                    <div class="summary-item">
+                        <div class="summary-number">7</div>
+                        <div class="summary-label">Total Shifts</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number" style="color: #4CAF50;">4</div>
+                        <div class="summary-label">Present</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number" style="color: #f44336;">1</div>
+                        <div class="summary-label">Absent</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-number" style="color: #FF9800;">2</div>
+                        <div class="summary-label">Pending</div>
+                    </div>
+                </div>
+
+                <!-- Attendance Cards -->
+                <div style="padding-bottom: 20px;">
+                    <!-- Daily Employee -->
+                    <div class="attendance-card">
+                        <div class="card-header">
+                            <div class="employee-avatar">P</div>
+                            <div class="employee-info">
+                                <div class="employee-name">Priya Sharma</div>
+                                <div class="employee-role">Daily • House Cleaning</div>
+                            </div>
+                            <div class="status-badge status-present">Present</div>
+                        </div>
+                        
+                        <div class="shift-section">
+                            <div class="shift-header">
+                                <div class="shift-label">Today's Attendance</div>
+                                <div class="shift-time">Full Day</div>
+                            </div>
+                            <div class="attendance-buttons">
+                                <button class="btn btn-present">Present</button>
+                                <button class="btn" style="background: #e0e0e0; color: #666;">Absent</button
