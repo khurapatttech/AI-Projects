@@ -201,10 +201,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _buildTodayAttendanceSection(data, theme),
                   SizedBox(height: MediaQuery.of(context).size.width < 600 ? 16 : 24),
                   
-                  // Weekly attendance chart
-                  _buildWeeklyAttendanceChart(data, theme),
-                  SizedBox(height: MediaQuery.of(context).size.width < 600 ? 16 : 24),
-                  
                   // Quick actions
                   _buildQuickActions(theme),
                   SizedBox(height: MediaQuery.of(context).size.width < 600 ? 16 : 24),
@@ -333,139 +329,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Define breakpoints as constants
+  static const double _kTabletBreakpoint = 600;
+  static const double _kDesktopBreakpoint = 1200;
+  static const double _kDesktopSpacing = 12;
+  static const double _kMobileSpacing = 8;
+
   Widget _buildStatsGrid(DashboardData data, ThemeData theme) {
+    // Define stats data structure for better maintainability
+    final List<({String title, String value, IconData icon, Color color})> stats = [
+      (
+        title: 'Total Staff',
+        value: data.totalEmployees.toString(),
+        icon: Icons.people,
+        color: const Color(0xFF06B6D4),
+      ),
+      (
+        title: 'Active Staff',
+        value: data.activeEmployees.toString(),
+        icon: Icons.person,
+        color: const Color(0xFF10B981),
+      ),
+      (
+        title: 'Present Today',
+        value: data.presentToday.toString(),
+        icon: Icons.check_circle,
+        color: const Color(0xFF059669),
+      ),
+      (
+        title: 'Pending',
+        value: data.pendingAttendance.toString(),
+        icon: Icons.pending_actions,
+        color: const Color(0xFFF59E0B),
+      ),
+    ];
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
-        final isTablet = screenWidth >= 600 && screenWidth < 1200;
-        final isDesktop = screenWidth >= 1200;
-        
-        // Responsive grid layout
-        if (isDesktop) {
-          // Desktop: 4 cards in a row
+        final isTablet = screenWidth >= _kTabletBreakpoint && screenWidth < _kDesktopBreakpoint;
+        final isDesktop = screenWidth >= _kDesktopBreakpoint;
+        final spacing = isDesktop || isTablet ? _kDesktopSpacing : _kMobileSpacing;
+
+        // Helper function to create stat cards with consistent styling
+        Widget buildStatCardWithExpand(int index) {
+          return Expanded(
+            child: Semantics(
+              label: '${stats[index].title} statistics card',
+              value: stats[index].value,
+              child: _buildStatCard(
+                title: stats[index].title,
+                value: stats[index].value,
+                icon: stats[index].icon,
+                color: stats[index].color,
+                theme: theme,
+              ),
+            ),
+          );
+        }
+
+        // Helper function to create a row of stat cards
+        Widget buildStatRow(int startIndex, {required double spacing}) {
           return Row(
             children: [
-              Expanded(child: _buildStatCard(
-                title: 'Total Staff',
-                value: data.totalEmployees.toString(),
-                icon: Icons.people,
-                color: const Color(0xFF06B6D4),
-                theme: theme,
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard(
-                title: 'Active Staff',
-                value: data.activeEmployees.toString(),
-                icon: Icons.person,
-                color: const Color(0xFF10B981),
-                theme: theme,
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard(
-                title: 'Present Today',
-                value: data.presentToday.toString(),
-                icon: Icons.check_circle,
-                color: const Color(0xFF059669),
-                theme: theme,
-              )),
-              const SizedBox(width: 12),
-              Expanded(child: _buildStatCard(
-                title: 'Pending',
-                value: data.pendingAttendance.toString(),
-                icon: Icons.pending_actions,
-                color: const Color(0xFFF59E0B),
-                theme: theme,
-              )),
+              buildStatCardWithExpand(startIndex),
+              SizedBox(width: spacing),
+              buildStatCardWithExpand(startIndex + 1),
             ],
           );
-        } else if (isTablet) {
-          // Tablet: 2x2 grid
-          return Column(
+        }
+
+        if (isDesktop) {
+          // Desktop: 4 cards in a row with equal spacing
+          return Row(
             children: [
-              Row(
-                children: [
-                  Expanded(child: _buildStatCard(
-                    title: 'Total Staff',
-                    value: data.totalEmployees.toString(),
-                    icon: Icons.people,
-                    color: const Color(0xFF06B6D4),
-                    theme: theme,
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildStatCard(
-                    title: 'Active Staff',
-                    value: data.activeEmployees.toString(),
-                    icon: Icons.person,
-                    color: const Color(0xFF10B981),
-                    theme: theme,
-                  )),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _buildStatCard(
-                    title: 'Present Today',
-                    value: data.presentToday.toString(),
-                    icon: Icons.check_circle,
-                    color: const Color(0xFF059669),
-                    theme: theme,
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildStatCard(
-                    title: 'Pending',
-                    value: data.pendingAttendance.toString(),
-                    icon: Icons.pending_actions,
-                    color: const Color(0xFFF59E0B),
-                    theme: theme,
-                  )),
-                ],
-              ),
+              for (int i = 0; i < stats.length; i++) ...[
+                if (i > 0) SizedBox(width: spacing),
+                buildStatCardWithExpand(i),
+              ],
             ],
           );
         } else {
-          // Mobile: 2x2 grid with smaller spacing
+          // Tablet/Mobile: 2x2 grid with appropriate spacing
           return Column(
             children: [
-              Row(
-                children: [
-                  Expanded(child: _buildStatCard(
-                    title: 'Total Staff',
-                    value: data.totalEmployees.toString(),
-                    icon: Icons.people,
-                    color: const Color(0xFF06B6D4),
-                    theme: theme,
-                  )),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildStatCard(
-                    title: 'Active Staff',
-                    value: data.activeEmployees.toString(),
-                    icon: Icons.person,
-                    color: const Color(0xFF10B981),
-                    theme: theme,
-                  )),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: _buildStatCard(
-                    title: 'Present Today',
-                    value: data.presentToday.toString(),
-                    icon: Icons.check_circle,
-                    color: const Color(0xFF059669),
-                    theme: theme,
-                  )),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildStatCard(
-                    title: 'Pending',
-                    value: data.pendingAttendance.toString(),
-                    icon: Icons.pending_actions,
-                    color: const Color(0xFFF59E0B),
-                    theme: theme,
-                  )),
-                ],
-              ),
+              buildStatRow(0, spacing: spacing),
+              SizedBox(height: spacing),
+              buildStatRow(2, spacing: spacing),
             ],
           );
         }
@@ -708,109 +658,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildWeeklyAttendanceChart(DashboardData data, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.bar_chart,
-                color: const Color(0xFF6366F1),
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Weekly Attendance Trend',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1E293B),
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          // Responsive chart container
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final screenWidth = MediaQuery.of(context).size.width;
-              final chartHeight = screenWidth < 600 ? 100.0 : 120.0;
-              
-              return SizedBox(
-                height: chartHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: data.weeklyAttendance.map((dayData) {
-                    final total = dayData.present + dayData.absent;
-                    final height = total > 0 ? (dayData.present / total * (chartHeight - 30)).toDouble() : 10.0;
-                    final date = DateTime.parse(dayData.date);
-                    final dayName = DateFormat('E').format(date);
-                    
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Container(
-                                width: double.infinity,
-                                height: height.clamp(8.0, chartHeight - 25),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981),
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(4),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              dayName,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFF64748B),
-                                fontSize: screenWidth < 600 ? 10 : 12,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
     );
   }
 
@@ -1068,6 +915,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Future<Map<String, String>> _getEmployeeNames() async {
+    final dbService = DatabaseService();
+    final employees = await dbService.getAllEmployees();
+    return {
+      for (var employee in employees)
+        if (employee.id != null)
+          employee.id.toString(): employee.name
+    };
+  }
+
   Widget _buildRecentActivity(DashboardData data, ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -1137,11 +994,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        'Employee ${attendance.employeeId} marked ${attendance.status}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFF334155),
-                        ),
+                      child: FutureBuilder<Map<String, String>>(
+                        future: _getEmployeeNames(),
+                        builder: (context, snapshot) {
+                          final employeeName = snapshot.data?[attendance.employeeId.toString()] ?? 'Unknown Employee';
+                          return Text(
+                            '$employeeName marked ${attendance.status}',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: const Color(0xFF334155),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     Text(
