@@ -10,6 +10,7 @@ class Employee {
   final int visitsPerDay;
 final List<String> offDays;
   final String createdDate;
+  final String joiningDate;
   final bool activeStatus;
 
   Employee({
@@ -22,6 +23,7 @@ final List<String> offDays;
     required this.visitsPerDay,
     required this.offDays,
     required this.createdDate,
+    required this.joiningDate,
     this.activeStatus = true,
   });
 
@@ -36,6 +38,7 @@ final List<String> offDays;
       'visits_per_day': visitsPerDay,
       'off_days': jsonEncode(offDays),
       'created_date': createdDate,
+      'joining_date': joiningDate,
       'active_status': activeStatus ? 1 : 0,
     };
   }
@@ -51,6 +54,7 @@ final List<String> offDays;
       visitsPerDay: map['visits_per_day'],
       offDays: List<String>.from(jsonDecode(map['off_days'])),
       createdDate: map['created_date'],
+      joiningDate: map['joining_date'] ?? map['created_date'], // Fallback for existing records
       activeStatus: map['active_status'] == 1,
     );
   }
@@ -65,6 +69,7 @@ final List<String> offDays;
     int? visitsPerDay,
     List<String>? offDays,
     String? createdDate,
+    String? joiningDate,
     bool? activeStatus,
   }) {
     return Employee(
@@ -77,6 +82,7 @@ final List<String> offDays;
       visitsPerDay: visitsPerDay ?? this.visitsPerDay,
       offDays: offDays ?? this.offDays,
       createdDate: createdDate ?? this.createdDate,
+      joiningDate: joiningDate ?? this.joiningDate,
       activeStatus: activeStatus ?? this.activeStatus,
     );
   }

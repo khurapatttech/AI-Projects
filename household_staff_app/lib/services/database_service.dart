@@ -7,7 +7,7 @@ import '../models/payment.dart';
 class DatabaseService {
   static Database? _database;
   static const String _databaseName = 'household_staff.db';
-  static const int _databaseVersion = 2; // Incremented from 1 to 2
+  static const int _databaseVersion = 3; // Incremented to 3 for joining_date column
 
   // Singleton pattern
   static final DatabaseService _instance = DatabaseService._internal();
@@ -43,6 +43,7 @@ class DatabaseService {
         visits_per_day INTEGER NOT NULL CHECK (visits_per_day IN (1, 2)),
         off_days TEXT,
         created_date TEXT NOT NULL,
+        joining_date TEXT NOT NULL,
         active_status INTEGER DEFAULT 1
       )
     ''');
@@ -91,6 +92,17 @@ class DatabaseService {
       }
       if (!columnNames.contains('updated_at')) {
         await db.execute('ALTER TABLE attendance ADD COLUMN updated_at TEXT;');
+      }
+    }
+    
+    if (oldVersion < 3) {
+      // Add joining_date column to employees table
+      final employeeColumns = await db.rawQuery("PRAGMA table_info(employees);");
+      final employeeColumnNames = employeeColumns.map((c) => c['name']).toSet();
+      if (!employeeColumnNames.contains('joining_date')) {
+        await db.execute('ALTER TABLE employees ADD COLUMN joining_date TEXT;');
+        // Update existing employees to use created_date as joining_date
+        await db.execute('UPDATE employees SET joining_date = created_date WHERE joining_date IS NULL;');
       }
     }
     // Future migrations go here

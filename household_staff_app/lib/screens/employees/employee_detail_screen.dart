@@ -237,6 +237,12 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   _buildInfoRow(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Joining Date',
+                    value: _formatDate(employee.joiningDate),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildInfoRow(
                     icon: Icons.repeat,
                     label: 'Visits per Day',
                     value: '${employee.visitsPerDay} visit${employee.visitsPerDay > 1 ? 's' : ''}',

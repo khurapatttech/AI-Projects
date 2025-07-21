@@ -21,6 +21,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   List<String> _offDays = [];
   bool _isSaving = false;
   bool _activeStatus = true;
+  late DateTime _joiningDate;
 
   final List<String> _daysOfWeek = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
@@ -38,6 +39,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     _visitsPerDay = e.visitsPerDay;
     _offDays = List<String>.from(e.offDays);
     _activeStatus = e.activeStatus;
+    _joiningDate = DateTime.parse(e.joiningDate);
   }
 
   @override
@@ -78,6 +80,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       visitsPerDay: _visitsPerDay,
       offDays: _offDays,
       createdDate: widget.employee.createdDate,
+      joiningDate: _joiningDate.toIso8601String(),
       activeStatus: _activeStatus,
     );
     try {
@@ -277,6 +280,8 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                             return null;
                           },
                         ),
+                        const SizedBox(height: 20),
+                        _buildJoiningDateField(),
                         const SizedBox(height: 24),
                         _buildVisitsSection(),
                       ],
@@ -441,6 +446,90 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
             ),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             counterText: maxLength != null ? null : '',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildJoiningDateField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Joining Date',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            final DateTime? picked = await showDatePicker(
+              context: context,
+              initialDate: _joiningDate,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: const ColorScheme.light(
+                      primary: Color(0xFF6366F1),
+                      onPrimary: Colors.white,
+                      surface: Colors.white,
+                      onSurface: Color(0xFF374151),
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
+            );
+            if (picked != null && picked != _joiningDate) {
+              setState(() {
+                _joiningDate = picked;
+              });
+            }
+          },
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF9FAFB),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.calendar_today_outlined,
+                  color: Color(0xFF9CA3AF),
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${_joiningDate.day}/${_joiningDate.month}/${_joiningDate.year}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.arrow_drop_down,
+                  color: Color(0xFF9CA3AF),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Attendance tracking will start from this date',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF9CA3AF),
           ),
         ),
       ],

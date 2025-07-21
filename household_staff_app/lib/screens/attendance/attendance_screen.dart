@@ -86,6 +86,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   String get _selectedDateString => DateFormat('yyyy-MM-dd').format(_selectedDate);
 
+  // Filter employees based on joining date
+  List<Employee> get _filteredEmployees {
+    final selectedDateString = _selectedDateString;
+    return _cachedEmployees.where((employee) {
+      final joiningDate = DateTime.parse(employee.joiningDate);
+      final selectedDate = DateTime.parse(selectedDateString);
+      // Only show employees who have joined on or before the selected date
+      return joiningDate.isBefore(selectedDate) || joiningDate.isAtSameMomentAs(selectedDate);
+    }).toList();
+  }
+
   // Optimized attendance lookup using cache
   Attendance? _getCachedAttendance(Employee e, String shiftType) {
     final dateString = _selectedDateString;
@@ -217,11 +228,11 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   // Add a helper to get the time window label
   // Optimized summary bar using cached data
   Widget _buildOptimizedSummaryBar() {
-    if (_cachedEmployees.isEmpty) return const SizedBox(height: 60);
+    if (_filteredEmployees.isEmpty) return const SizedBox(height: 60);
     
     int presentCount = 0, absentCount = 0, pendingCount = 0;
     
-    for (final e in _cachedEmployees) {
+    for (final e in _filteredEmployees) {
       if (e.visitsPerDay == 1) {
         final att = _getCachedAttendance(e, 'full_day');
         if (att == null) pendingCount++;
@@ -263,7 +274,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               Expanded(
                 child: Column(
                   children: [
-                    Text('${_cachedEmployees.length}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.blue)),
+                    Text('${_filteredEmployees.length}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.blue)),
                     Text('Total Staff', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
                   ],
                 ),
@@ -304,8 +315,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     // Calculate status once and reuse
     final overallStatus = _getEmployeeOverallStatus(e);
     final statusColor = _statusColor(overallStatus);
-    final statusText = overallStatus ?? 'Pending';
-    final scheduleText = e.visitsPerDay == 2 ? 'Twice Daily' : 'Daily';
     
     return Row(
       children: [
@@ -792,13 +801,13 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
           // Employee cards - optimized with cached data
           Expanded(
-            child: _cachedEmployees.isEmpty 
+            child: _filteredEmployees.isEmpty 
               ? const Center(child: CircularProgressIndicator())
               : ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: _cachedEmployees.length,
+                  itemCount: _filteredEmployees.length,
                   itemBuilder: (context, index) {
-                    final e = _cachedEmployees[index];
+                    final e = _filteredEmployees[index];
                     // Use cached attendance data instead of database calls
                     final attFull = _getCachedAttendance(e, 'full_day');
                     final attMorning = _getCachedAttendance(e, 'morning');
