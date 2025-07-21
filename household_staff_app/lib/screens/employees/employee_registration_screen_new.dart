@@ -2,43 +2,27 @@ import 'package:flutter/material.dart';
 import '../../models/employee.dart';
 import '../../services/database_service.dart';
 
-class EmployeeEditScreen extends StatefulWidget {
-  final Employee employee;
-  const EmployeeEditScreen({Key? key, required this.employee}) : super(key: key);
+class EmployeeRegistrationScreen extends StatefulWidget {
+  const EmployeeRegistrationScreen({Key? key}) : super(key: key);
 
   @override
-  State<EmployeeEditScreen> createState() => _EmployeeEditScreenState();
+  State<EmployeeRegistrationScreen> createState() => _EmployeeRegistrationScreenState();
 }
 
-class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
+class _EmployeeRegistrationScreenState extends State<EmployeeRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _ageController;
-  late TextEditingController _phoneController;
-  late TextEditingController _emailController;
-  late TextEditingController _salaryController;
+  final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _salaryController = TextEditingController();
   int _visitsPerDay = 1;
   List<String> _offDays = [];
   bool _isSaving = false;
-  bool _activeStatus = true;
 
   final List<String> _daysOfWeek = [
     'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.employee;
-    _nameController = TextEditingController(text: e.name);
-    _ageController = TextEditingController(text: e.age.toString());
-    _phoneController = TextEditingController(text: e.phone);
-    _emailController = TextEditingController(text: e.email ?? '');
-    _salaryController = TextEditingController(text: e.monthlySalary.toString());
-    _visitsPerDay = e.visitsPerDay;
-    _offDays = List<String>.from(e.offDays);
-    _activeStatus = e.activeStatus;
-  }
 
   @override
   void dispose() {
@@ -53,8 +37,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   Future<bool> _isNameUnique(String name) async {
     final db = DatabaseService();
     final employees = await db.getAllEmployees();
-    // Allow the same name if it's the current employee
-    return !employees.any((e) => e.name.toLowerCase() == name.toLowerCase() && e.id != widget.employee.id);
+    return !employees.any((e) => e.name.toLowerCase() == name.toLowerCase());
   }
 
   void _submitForm() async {
@@ -68,8 +51,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       );
       return;
     }
-    final updatedEmployee = Employee(
-      id: widget.employee.id,
+    final employee = Employee(
       name: _nameController.text.trim(),
       age: int.parse(_ageController.text.trim()),
       phone: _phoneController.text.trim(),
@@ -77,20 +59,20 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       monthlySalary: double.parse(_salaryController.text.trim()),
       visitsPerDay: _visitsPerDay,
       offDays: _offDays,
-      createdDate: widget.employee.createdDate,
-      activeStatus: _activeStatus,
+      createdDate: DateTime.now().toIso8601String(),
+      activeStatus: true,
     );
     try {
-      await DatabaseService().updateEmployee(updatedEmployee);
+      await DatabaseService().insertEmployee(employee);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Employee updated successfully!')),
+        const SnackBar(content: Text('Employee registered successfully!')),
       );
-      Navigator.of(context).pop(true); // Return true to indicate update
+      Navigator.of(context).pop();
     } catch (e) {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating employee: $e')),
+        SnackBar(content: Text('Error saving employee: $e')),
       );
     }
   }
@@ -100,7 +82,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Edit Employee'),
+        title: const Text('Register Employee'),
         elevation: 0,
         backgroundColor: const Color(0xFF6366F1),
         foregroundColor: Colors.white,
@@ -136,21 +118,14 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                       ),
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: _activeStatus ? const Color(0xFF6366F1) : Colors.grey,
-                            child: Text(
-                              _nameController.text.isNotEmpty ? _nameController.text[0].toUpperCase() : 'E',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                          Icon(
+                            Icons.person_add,
+                            size: 48,
+                            color: const Color(0xFF6366F1),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           const Text(
-                            'Edit Employee Information',
+                            'Employee Registration',
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -159,7 +134,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                           ),
                           const SizedBox(height: 4),
                           const Text(
-                            'Update employee details below',
+                            'Fill in the details to register a new employee',
                             style: TextStyle(
                               fontSize: 14,
                               color: Color(0xFF64748B),
@@ -171,141 +146,127 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                     ),
 
                     // Personal Information Section
-                    _buildSectionCard(
-                      title: 'Personal Information',
-                      icon: Icons.person,
-                      children: [
-                        _buildStyledTextField(
-                          controller: _nameController,
-                          label: 'Full Name',
-                          hint: 'Enter employee full name',
-                          icon: Icons.person_outline,
-                          maxLength: 50,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Name is required';
-                            }
-                            return null;
-                          },
-                          onChanged: (value) => setState(() {}), // Update avatar
-                        ),
-                        const SizedBox(height: 20),
-                        _buildStyledTextField(
-                          controller: _ageController,
-                          label: 'Age',
-                          hint: 'Enter age (18-70)',
-                          icon: Icons.cake_outlined,
-                          keyboardType: TextInputType.number,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Age is required';
-                            }
-                            final age = int.tryParse(value.trim());
-                            if (age == null || age < 18 || age > 70) {
-                              return 'Age must be between 18 and 70';
-                            }
-                            return null;
-                          },
-                        ),
-                      ],
-                    ),
+                    _buildSectionHeader('Personal Information', Icons.person),
+                    const SizedBox(height: 16),
+                    _buildCard([
+                      _buildStyledTextField(
+                        controller: _nameController,
+                        label: 'Full Name',
+                        hint: 'Enter employee full name',
+                        icon: Icons.person_outline,
+                        maxLength: 50,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Name is required';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      _buildStyledTextField(
+                        controller: _ageController,
+                        label: 'Age',
+                        hint: 'Enter age (18-70)',
+                        icon: Icons.cake_outlined,
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Age is required';
+                          }
+                          final age = int.tryParse(value.trim());
+                          if (age == null || age < 18 || age > 70) {
+                            return 'Age must be between 18 and 70';
+                          }
+                          return null;
+                        },
+                      ),
+                    ]),
+
                     const SizedBox(height: 24),
-                    
-                    // Contact Information
-                    _buildSectionCard(
-                      title: 'Contact Information',
-                      icon: Icons.contact_phone,
-                      children: [
-                        _buildStyledTextField(
-                          controller: _phoneController,
-                          label: 'Phone Number',
-                          hint: 'Enter 10-digit phone number',
-                          icon: Icons.phone_outlined,
-                          keyboardType: TextInputType.phone,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Phone is required';
+
+                    // Contact Information Section
+                    _buildSectionHeader('Contact Information', Icons.contact_phone),
+                    const SizedBox(height: 16),
+                    _buildCard([
+                      _buildStyledTextField(
+                        controller: _phoneController,
+                        label: 'Phone Number',
+                        hint: 'Enter 10 digit phone number',
+                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Phone is required';
+                          }
+                          final phoneReg = RegExp(r'^[0-9]{10,15}$');
+                          if (!phoneReg.hasMatch(value.trim())) {
+                            return 'Enter a valid phone number (10-15 digits)';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      _buildStyledTextField(
+                        controller: _emailController,
+                        label: 'Email Address',
+                        hint: 'Enter email address (optional)',
+                        icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                        isOptional: true,
+                        validator: (value) {
+                          if (value != null && value.trim().isNotEmpty) {
+                            final emailReg = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+                            if (!emailReg.hasMatch(value.trim())) {
+                              return 'Enter a valid email address';
                             }
-                            final phoneReg = RegExp(r'^[0-9]{10}$');
-                            if (!phoneReg.hasMatch(value.trim())) {
-                              return 'Enter a valid phone number';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        _buildStyledTextField(
-                          controller: _emailController,
-                          label: 'Email Address',
-                          hint: 'Enter email address (optional)',
-                          icon: Icons.email_outlined,
-                          keyboardType: TextInputType.emailAddress,
-                          isOptional: true,
-                          validator: (value) {
-                            if (value != null && value.trim().isNotEmpty) {
-                              final emailReg = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-                              if (!emailReg.hasMatch(value.trim())) {
-                                return 'Enter a valid email address';
-                              }
-                            }
-                            return null;
-                          },
-                        ),
-                      ],
-                    ),
+                          }
+                          return null;
+                        },
+                      ),
+                    ]),
+
                     const SizedBox(height: 24),
-                    
-                    // Employment Details
-                    _buildSectionCard(
-                      title: 'Employment Details',
-                      icon: Icons.work,
-                      children: [
-                        _buildStyledTextField(
-                          controller: _salaryController,
-                          label: 'Monthly Salary',
-                          hint: 'Enter monthly salary amount',
-                          icon: Icons.currency_rupee_outlined,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Salary is required';
-                            }
-                            final salary = double.tryParse(value.trim());
-                            if (salary == null || salary <= 0) {
-                              return 'Enter a valid salary';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 24),
-                        _buildVisitsSection(),
-                      ],
-                    ),
+
+                    // Employment Details Section
+                    _buildSectionHeader('Employment Details', Icons.work),
+                    const SizedBox(height: 16),
+                    _buildCard([
+                      _buildStyledTextField(
+                        controller: _salaryController,
+                        label: 'Monthly Salary',
+                        hint: 'Enter monthly salary amount',
+                        icon: Icons.currency_rupee_outlined,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Salary is required';
+                          }
+                          final salary = double.tryParse(value.trim());
+                          if (salary == null || salary <= 0) {
+                            return 'Enter a valid salary amount';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      _buildVisitsSection(),
+                    ]),
+
                     const SizedBox(height: 24),
-                    
-                    // Schedule Information
-                    _buildSectionCard(
-                      title: 'Schedule Information',
-                      icon: Icons.schedule,
-                      children: [
-                        _buildOffDaysSection(),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // Status Section
-                    _buildSectionCard(
-                      title: 'Employee Status',
-                      icon: Icons.admin_panel_settings,
-                      children: [
-                        _buildStatusSection(),
-                      ],
-                    ),
+
+                    // Schedule Information Section
+                    _buildSectionHeader('Schedule Information', Icons.schedule),
+                    const SizedBox(height: 16),
+                    _buildCard([
+                      _buildOffDaysSection(),
+                    ]),
+
                     const SizedBox(height: 32),
+
+                    // Register Button
+                    _buildRegisterButton(),
                     
-                    // Update Button
-                    _buildUpdateButton(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 24), // Bottom padding
                   ],
                 ),
               ),
@@ -316,60 +277,53 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     );
   }
 
-  Widget _buildSectionCard({
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Row(
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: const Color(0xFF6366F1),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
         Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            color: const Color(0xFF6366F1).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: children,
+          child: Icon(
+            icon,
+            size: 20,
+            color: const Color(0xFF6366F1),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF1E293B),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCard(List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
     );
   }
 
@@ -382,7 +336,6 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     String? Function(String?)? validator,
     int? maxLength,
     bool isOptional = false,
-    Function(String)? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -413,7 +366,6 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
           keyboardType: keyboardType,
           maxLength: maxLength,
           validator: validator,
-          onChanged: onChanged,
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: Icon(icon, color: const Color(0xFF9CA3AF)),
@@ -678,109 +630,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     );
   }
 
-  Widget _buildStatusSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Employee Status',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF374151),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isMobile = MediaQuery.of(context).size.width < 600;
-              
-              if (isMobile) {
-                return Column(
-                  children: [
-                    _buildStatusOption(true, 'Active', 'Employee is currently working'),
-                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                    _buildStatusOption(false, 'Inactive', 'Employee is not currently working'),
-                  ],
-                );
-              } else {
-                return IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      Expanded(child: _buildStatusOption(true, 'Active', 'Currently working')),
-                      const VerticalDivider(width: 1, color: Color(0xFFE5E7EB)),
-                      Expanded(child: _buildStatusOption(false, 'Inactive', 'Not working')),
-                    ],
-                  ),
-                );
-              }
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatusOption(bool value, String title, String subtitle) {
-    final isSelected = _activeStatus == value;
-    return InkWell(
-      onTap: () => setState(() => _activeStatus = value),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? const Color(0xFF6366F1) : const Color(0xFFD1D5DB),
-                  width: 2,
-                ),
-                color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
-              ),
-              child: isSelected
-                  ? const Icon(Icons.check, size: 12, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF374151),
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF9CA3AF),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUpdateButton() {
+  Widget _buildRegisterButton() {
     return Container(
       width: double.infinity,
       height: 56,
@@ -824,10 +674,10 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
             : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.save, color: Colors.white),
+                  Icon(Icons.person_add, color: Colors.white),
                   SizedBox(width: 8),
                   Text(
-                    'Update Employee',
+                    'Register Employee',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -839,4 +689,4 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       ),
     );
   }
-} 
+}

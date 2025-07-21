@@ -8,7 +8,7 @@ class Employee {
   final String? email;
   final double monthlySalary;
   final int visitsPerDay;
-  final List<String> offDays;
+final List<String> offDays;
   final String createdDate;
   final bool activeStatus;
 

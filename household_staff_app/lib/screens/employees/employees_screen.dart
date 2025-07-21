@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/employee.dart';
 import '../../services/database_service.dart';
 import 'employee_registration_screen.dart';
@@ -37,6 +38,33 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
     _refresh();
   }
 
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri phoneUri = Uri(scheme: 'tel', path: phoneNumber);
+    try {
+      if (await canLaunchUrl(phoneUri)) {
+        await launchUrl(phoneUri);
+      } else {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not launch phone dialer'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error making call: $e'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -53,7 +81,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
-            return Center(child: Text('Error: \\${snapshot.error}'));
+            return Center(child: Text('Error: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('No employees registered yet.'));
           }
@@ -98,12 +126,16 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     elevation: 2,
                     child: InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
+                      onTap: () async {
+                        final result = await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => EmployeeDetailScreen(employee: e),
                           ),
                         );
+                        // If employee was deleted or updated, refresh the list
+                        if (result == true) {
+                          _refresh();
+                        }
                       },
                       child: Padding(
                         padding: const EdgeInsets.all(12),
@@ -168,6 +200,23 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
+                            // Call button
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () => _makePhoneCall(e.phone),
+                                child: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Icon(
+                                    Icons.phone,
+                                    color: Colors.green.shade600,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
                             Icon(
                               Icons.chevron_right,
                               color: Colors.grey[400],

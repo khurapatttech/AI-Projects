@@ -206,7 +206,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       // If both are present, return present
       if (morning == 'present' && evening == 'present') return 'present';
       // If any is absent, return absent
-      if (morning == 'absent' || evening == 'absent') return 'absent';
+    if (morning == 'absent' || evening == 'absent') return 'absent';
       // If one is present and other is null, return present
       if (morning == 'present' || evening == 'present') return 'present';
       // If both are null, return null (pending)
@@ -299,6 +299,77 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
+  // Optimized employee header with cached status calculations
+  Widget _buildEmployeeHeader(Employee e) {
+    // Calculate status once and reuse
+    final overallStatus = _getEmployeeOverallStatus(e);
+    final statusColor = _statusColor(overallStatus);
+    final statusText = overallStatus ?? 'Pending';
+    final scheduleText = e.visitsPerDay == 2 ? 'Twice Daily' : 'Daily';
+    
+    return Row(
+      children: [
+        CircleAvatar(
+          child: Text(e.name[0].toUpperCase()),
+          backgroundColor: Colors.blue.shade100,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                e.name, 
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+        _buildStatusIndicator(statusColor),
+      ],
+    );
+  }
+
+
+  // Reusable status indicator component
+  Widget _buildStatusIndicator(Color statusColor) {
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: statusColor,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  // Optimized shift status styling helper
+  Map<String, dynamic> _getShiftStatusStyle(String? status) {
+    switch (status) {
+      case 'present':
+        return {
+          'backgroundColor': Colors.green.shade50,
+          'borderColor': Colors.green.shade200,
+          'iconColor': Colors.green,
+          'icon': Icons.check,
+        };
+      case 'absent':
+        return {
+          'backgroundColor': Colors.red.shade50,
+          'borderColor': Colors.red.shade200,
+          'iconColor': Colors.red,
+          'icon': Icons.close,
+        };
+      default:
+        return {
+          'backgroundColor': Colors.grey.shade50,
+          'borderColor': Colors.grey.shade200,
+          'iconColor': Colors.grey.shade400,
+          'icon': Icons.schedule,
+        };
+    }
+  }
+
   String _shiftTimeLabel(String shiftType) {
     switch (shiftType) {
       case 'full_day':
@@ -377,57 +448,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        child: Text(e.name[0].toUpperCase()),
-                        backgroundColor: Colors.blue.shade100,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(e.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Row(
-                              children: [
-                                Text(e.visitsPerDay == 2 ? 'Twice Daily' : 'Daily', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                const SizedBox(width: 8),
-                                // Quick status indicator to show current status at a glance
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: _statusColor(_getEmployeeOverallStatus(e)).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: _statusColor(_getEmployeeOverallStatus(e)),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    _getEmployeeOverallStatus(e) ?? 'Pending',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w500,
-                                      color: _statusColor(_getEmployeeOverallStatus(e)),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 14,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: _statusColor(_getEmployeeOverallStatus(e)),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ),
+                  _buildEmployeeHeader(e),
                   if (e.visitsPerDay == 1)
                     _modernShiftRow(e, 'full_day', attFull, canEdit, label: 'Today', timeLabel: _shiftTimeLabel('full_day')),
                   if (e.visitsPerDay == 2) ...[
@@ -451,6 +472,9 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     // Simplified logic: Allow marking if within 2-day window (regardless of existing attendance)
     final allowMarking = canEdit;
     
+    // Get optimized styling based on status
+    final statusStyle = _getShiftStatusStyle(status);
+    
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = MediaQuery.of(context).size.width < 600;
@@ -460,18 +484,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         
         return Container(
           decoration: BoxDecoration(
-            color: status == 'present' 
-                ? Colors.green.shade50
-                : status == 'absent' 
-                    ? Colors.red.shade50 
-                    : Colors.grey.shade50,
+            color: statusStyle['backgroundColor'],
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: status == 'present' 
-                  ? Colors.green.shade200
-                  : status == 'absent' 
-                      ? Colors.red.shade200 
-                      : Colors.grey.shade200,
+              color: statusStyle['borderColor'],
               width: 1,
             ),
           ),
@@ -483,24 +499,16 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               // Header Row - More compact and informative
               Row(
                 children: [
-                  // Status Icon
+                  // Status Icon - optimized
                   Container(
                     width: 20,
                     height: 20,
                     decoration: BoxDecoration(
-                      color: status == 'present' 
-                          ? Colors.green 
-                          : status == 'absent' 
-                              ? Colors.red 
-                              : Colors.grey.shade400,
+                      color: statusStyle['iconColor'],
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
-                      status == 'present' 
-                          ? Icons.check 
-                          : status == 'absent' 
-                              ? Icons.close 
-                              : Icons.schedule,
+                      statusStyle['icon'],
                       color: Colors.white,
                       size: isMobile ? 12 : 14,
                     ),
@@ -530,25 +538,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       ],
                     ),
                   ),
-                  
-                  // Status Badge - More compact
-                  if (status != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: status == 'present' ? Colors.green : Colors.red,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        status.toUpperCase(),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isMobile ? 9 : 10,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
                 ],
               ),
               
