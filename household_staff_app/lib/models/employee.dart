@@ -8,7 +8,8 @@ class Employee {
   final String? email;
   final double monthlySalary;
   final int visitsPerDay;
-final List<String> offDays;
+final List<String> offDays; // Full day offs
+  final Map<String, List<String>> partialOffDays; // day -> ['morning'/'evening']
   final String createdDate;
   final String joiningDate;
   final bool activeStatus;
@@ -22,6 +23,7 @@ final List<String> offDays;
     required this.monthlySalary,
     required this.visitsPerDay,
     required this.offDays,
+    this.partialOffDays = const {},
     required this.createdDate,
     required this.joiningDate,
     this.activeStatus = true,
@@ -37,6 +39,7 @@ final List<String> offDays;
       'monthly_salary': monthlySalary,
       'visits_per_day': visitsPerDay,
       'off_days': jsonEncode(offDays),
+      'partial_off_days': jsonEncode(partialOffDays),
       'created_date': createdDate,
       'joining_date': joiningDate,
       'active_status': activeStatus ? 1 : 0,
@@ -44,6 +47,12 @@ final List<String> offDays;
   }
 
   factory Employee.fromMap(Map<String, dynamic> map) {
+    Map<String, List<String>> partialOffs = {};
+    if (map['partial_off_days'] != null) {
+      final decoded = jsonDecode(map['partial_off_days']) as Map<String, dynamic>;
+      partialOffs = decoded.map((key, value) => MapEntry(key, List<String>.from(value)));
+    }
+    
     return Employee(
       id: map['id'],
       name: map['name'],
@@ -53,6 +62,7 @@ final List<String> offDays;
       monthlySalary: map['monthly_salary'],
       visitsPerDay: map['visits_per_day'],
       offDays: List<String>.from(jsonDecode(map['off_days'])),
+      partialOffDays: partialOffs,
       createdDate: map['created_date'],
       joiningDate: map['joining_date'] ?? map['created_date'], // Fallback for existing records
       activeStatus: map['active_status'] == 1,
@@ -68,6 +78,7 @@ final List<String> offDays;
     double? monthlySalary,
     int? visitsPerDay,
     List<String>? offDays,
+    Map<String, List<String>>? partialOffDays,
     String? createdDate,
     String? joiningDate,
     bool? activeStatus,
@@ -81,6 +92,7 @@ final List<String> offDays;
       monthlySalary: monthlySalary ?? this.monthlySalary,
       visitsPerDay: visitsPerDay ?? this.visitsPerDay,
       offDays: offDays ?? this.offDays,
+      partialOffDays: partialOffDays ?? this.partialOffDays,
       createdDate: createdDate ?? this.createdDate,
       joiningDate: joiningDate ?? this.joiningDate,
       activeStatus: activeStatus ?? this.activeStatus,

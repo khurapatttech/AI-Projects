@@ -54,19 +54,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     for (final emp in employees) {
       if (!emp.activeStatus) continue;
       
-      // Check if today is an off day
-      final weekday = DateFormat('EEEE').format(DateTime.now());
-      if (emp.offDays.contains(weekday)) continue;
+      // Check joining date - only include employees who have joined by today
+      final joiningDate = DateTime.parse(emp.joiningDate);
+      final todayDateTime = DateTime.now();
+      if (joiningDate.isAfter(todayDateTime)) continue;
       
-      if (emp.visitsPerDay == 1) {
-        expectedAttendance += 1;
-      } else {
-        expectedAttendance += 2; // morning and evening
-      }
+      expectedAttendance += _calculateExpectedAttendanceForEmployee(emp, todayDateTime);
     }
     
-    int markedAttendance = todayAttendance.length;
-    int pendingAttendance = expectedAttendance - markedAttendance;
+    // Calculate pending more accurately
+    // Pending = Expected - Present - Absent (but not negative)
+    int actualMarkedCount = presentToday + absentToday;
+    int pendingAttendance = expectedAttendance - actualMarkedCount;
+    
+    // Ensure pending doesn't go negative
+    if (pendingAttendance < 0) pendingAttendance = 0;
     
     // Get recent attendance for chart data (last 7 days)
     final last7Days = List.generate(7, (i) => 
@@ -1020,6 +1022,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  int _calculateExpectedAttendanceForEmployee(Employee emp, DateTime date) {
+    final weekday = DateFormat('EEEE').format(date);
+    
+    // Check full day off
+    if (emp.offDays.contains(weekday)) return 0;
+    
+    if (emp.visitsPerDay == 1) {
+      return 1; // Single visit, full day
+    } else {
+      // Double visit - check partial offs
+      final partialOffs = emp.partialOffDays[weekday] ?? [];
+      int expected = 2;
+      if (partialOffs.contains('morning')) expected--;
+      if (partialOffs.contains('evening')) expected--;
+      return expected;
+    }
   }
 }
 

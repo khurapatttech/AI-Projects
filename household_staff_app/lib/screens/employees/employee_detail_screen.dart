@@ -256,11 +256,7 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
                 title: 'Schedule Information',
                 icon: Icons.schedule,
                 children: [
-                  _buildInfoRow(
-                    icon: Icons.event_busy_outlined,
-                    label: 'Weekly Off Days',
-                    value: employee.offDays.isNotEmpty ? employee.offDays.join(', ') : 'No off days',
-                  ),
+                  _buildOffDaysInfo(),
                   const SizedBox(height: 16),
                   _buildInfoRow(
                     icon: Icons.calendar_today_outlined,
@@ -413,6 +409,173 @@ class _EmployeeDetailScreenState extends State<EmployeeDetailScreen> {
     } catch (e) {
       return dateString;
     }
+  }
+
+  Widget _buildOffDaysInfo() {
+    if (employee.offDays.isEmpty && employee.partialOffDays.isEmpty) {
+      return _buildInfoRow(
+        icon: Icons.event_busy_outlined,
+        label: 'Weekly Off Schedule',
+        value: 'No off days - works all 7 days',
+      );
+    }
+
+    // Process data to avoid duplicates and handle edge cases
+    List<String> effectiveFullDays = List.from(employee.offDays);
+    Map<String, List<String>> effectivePartialOffs = Map.from(employee.partialOffDays);
+    
+    // Check for days where partial offs equal full day (both morning and evening)
+    if (employee.visitsPerDay == 2) {
+      effectivePartialOffs.removeWhere((day, shifts) {
+        if (shifts.contains('morning') && shifts.contains('evening')) {
+          // If both shifts are off, treat as full day off
+          if (!effectiveFullDays.contains(day)) {
+            effectiveFullDays.add(day);
+          }
+          return true; // Remove from partial offs
+        }
+        return false;
+      });
+    }
+    
+    // Remove any duplicates between full day and partial off lists
+    effectivePartialOffs.removeWhere((day, shifts) => effectiveFullDays.contains(day));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.event_busy_outlined,
+                size: 20,
+                color: const Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Weekly Off Schedule',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Custom schedule configured',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Full day offs (including converted partial offs)
+              if (effectiveFullDays.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Full Day Off',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        effectiveFullDays.join(', '),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (effectivePartialOffs.isNotEmpty) const SizedBox(height: 12),
+              ],
+              
+              // Partial offs (only single shifts, not both)
+              if (effectivePartialOffs.isNotEmpty) ...[
+                ...effectivePartialOffs.entries.map((entry) {
+                  final day = entry.key;
+                  final shifts = entry.value;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Partial Off',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '$day (${shifts.join(', ')})',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF1E293B),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _makePhoneCall(String phoneNumber) async {

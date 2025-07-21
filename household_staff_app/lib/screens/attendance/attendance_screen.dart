@@ -133,7 +133,29 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   bool _isOffDay(Employee e) {
     final weekday = DateFormat('EEEE').format(_selectedDate);
-    return e.offDays.contains(weekday);
+    
+    // Check full day offs
+    if (e.offDays.contains(weekday)) return true;
+    
+    // For double visit employees, check if both shifts are off
+    if (e.visitsPerDay == 2) {
+      final partialOffs = e.partialOffDays[weekday] ?? [];
+      return partialOffs.contains('morning') && partialOffs.contains('evening');
+    }
+    
+    return false;
+  }
+
+  // Helper method to check if a specific shift is off
+  bool _isShiftOff(Employee e, String shiftType) {
+    final weekday = DateFormat('EEEE').format(_selectedDate);
+    
+    // Check full day offs
+    if (e.offDays.contains(weekday)) return true;
+    
+    // Check partial offs for specific shift
+    final partialOffs = e.partialOffDays[weekday] ?? [];
+    return partialOffs.contains(shiftType);
   }
 
   bool _isWithinCorrectionWindow() {
@@ -234,19 +256,41 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     
     for (final e in _filteredEmployees) {
       if (e.visitsPerDay == 1) {
+        // Single visit employee
+        if (_isShiftOff(e, 'full_day')) {
+          // Skip off-day employees from stats
+          continue;
+        }
         final att = _getCachedAttendance(e, 'full_day');
         if (att == null) pendingCount++;
         if (att?.status == 'present') presentCount++;
         if (att?.status == 'absent') absentCount++;
       } else {
-        final attM = _getCachedAttendance(e, 'morning');
-        final attE = _getCachedAttendance(e, 'evening');
-        if (attM == null) pendingCount++;
-        if (attE == null) pendingCount++;
-        if (attM?.status == 'present') presentCount++;
-        if (attE?.status == 'present') presentCount++;
-        if (attM?.status == 'absent') absentCount++;
-        if (attE?.status == 'absent') absentCount++;
+        // Double visit employee - check each shift individually
+        final weekday = DateFormat('EEEE').format(_selectedDate);
+        final partialOffs = e.partialOffDays[weekday] ?? [];
+        final isFullDayOff = e.offDays.contains(weekday);
+        
+        if (isFullDayOff) {
+          // Skip employees with full day off
+          continue;
+        }
+        
+        // Morning shift
+        if (!partialOffs.contains('morning')) {
+          final attM = _getCachedAttendance(e, 'morning');
+          if (attM == null) pendingCount++;
+          if (attM?.status == 'present') presentCount++;
+          if (attM?.status == 'absent') absentCount++;
+        }
+        
+        // Evening shift
+        if (!partialOffs.contains('evening')) {
+          final attE = _getCachedAttendance(e, 'evening');
+          if (attE == null) pendingCount++;
+          if (attE?.status == 'present') presentCount++;
+          if (attE?.status == 'absent') absentCount++;
+        }
       }
     }
     
@@ -391,6 +435,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return 'Full Day';
   }
 
+  Widget _buildOffShiftIndicator(String label) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.orange.shade300, style: BorderStyle.solid, width: 1),
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.orange.shade50,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.schedule_outlined, color: Colors.orange.shade700, size: 16),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.orange.shade700,
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _employeeAttendanceCardModern(Employee e, Attendance? attFull, Attendance? attMorning, Attendance? attEvening, bool canEdit, bool isOff) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
@@ -458,12 +528,22 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildEmployeeHeader(e),
-                  if (e.visitsPerDay == 1)
-                    _modernShiftRow(e, 'full_day', attFull, canEdit, label: 'Today', timeLabel: _shiftTimeLabel('full_day')),
+                  if (e.visitsPerDay == 1) ...[
+                    if (_isShiftOff(e, 'full_day'))
+                      _buildOffShiftIndicator('Full Day Off')
+                    else
+                      _modernShiftRow(e, 'full_day', attFull, canEdit, label: 'Today', timeLabel: _shiftTimeLabel('full_day')),
+                  ],
                   if (e.visitsPerDay == 2) ...[
-                    _modernShiftRow(e, 'morning', attMorning, canEdit, label: 'Morning', timeLabel: _shiftTimeLabel('morning')),
+                    if (_isShiftOff(e, 'morning'))
+                      _buildOffShiftIndicator('Morning Off')
+                    else
+                      _modernShiftRow(e, 'morning', attMorning, canEdit, label: 'Morning', timeLabel: _shiftTimeLabel('morning')),
                     const SizedBox(height: 8),
-                    _modernShiftRow(e, 'evening', attEvening, canEdit, label: 'Evening', timeLabel: _shiftTimeLabel('evening')),
+                    if (_isShiftOff(e, 'evening'))
+                      _buildOffShiftIndicator('Evening Off')
+                    else
+                      _modernShiftRow(e, 'evening', attEvening, canEdit, label: 'Evening', timeLabel: _shiftTimeLabel('evening')),
                   ],
                 ],
               ),
@@ -741,6 +821,98 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     );
   }
 
+  Widget _buildEmployeeList() {
+    // Check if data has been loaded at least once
+    final hasLoadedData = _lastLoadedDate.isNotEmpty && _cachedEmployees.isNotEmpty;
+    
+    // If no data loaded yet, show loading
+    if (!hasLoadedData) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading employees...'),
+          ],
+        ),
+      );
+    }
+    
+    // If data loaded but no employees for this date, show appropriate message
+    if (_filteredEmployees.isEmpty) {
+      final selectedDateFormatted = DateFormat('MMM dd, yyyy').format(_selectedDate);
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.person_off,
+                size: 64,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No Employees Available',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'No employees had joined by $selectedDateFormatted',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _selectedDate = _dateOptions[0]; // Go back to today
+                  });
+                  _loadData();
+                },
+                icon: const Icon(Icons.today),
+                label: const Text('Go to Today'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6366F1),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    
+    // Show the employee list
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      itemCount: _filteredEmployees.length,
+      itemBuilder: (context, index) {
+        final e = _filteredEmployees[index];
+        // Use cached attendance data instead of database calls
+        final attFull = _getCachedAttendance(e, 'full_day');
+        final attMorning = _getCachedAttendance(e, 'morning');
+        final attEvening = _getCachedAttendance(e, 'evening');
+        
+        final isOff = _isOffDay(e);
+        final canEdit = _isWithinCorrectionWindow() && !isOff;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _employeeAttendanceCardModern(e, attFull, attMorning, attEvening, canEdit, isOff),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -801,26 +973,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           ),
           // Employee cards - optimized with cached data
           Expanded(
-            child: _filteredEmployees.isEmpty 
-              ? const Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: _filteredEmployees.length,
-                  itemBuilder: (context, index) {
-                    final e = _filteredEmployees[index];
-                    // Use cached attendance data instead of database calls
-                    final attFull = _getCachedAttendance(e, 'full_day');
-                    final attMorning = _getCachedAttendance(e, 'morning');
-                    final attEvening = _getCachedAttendance(e, 'evening');
-                    
-                    final isOff = _isOffDay(e);
-                    final canEdit = _isWithinCorrectionWindow() && !isOff;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _employeeAttendanceCardModern(e, attFull, attMorning, attEvening, canEdit, isOff),
-                    );
-                  },
-                ),
+            child: _buildEmployeeList(),
           ),
         ],
       ),

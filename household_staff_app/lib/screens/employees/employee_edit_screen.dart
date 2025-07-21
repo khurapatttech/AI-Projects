@@ -19,6 +19,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
   late TextEditingController _salaryController;
   int _visitsPerDay = 1;
   List<String> _offDays = [];
+  Map<String, List<String>> _partialOffDays = {};
   bool _isSaving = false;
   bool _activeStatus = true;
   late DateTime _joiningDate;
@@ -38,6 +39,9 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     _salaryController = TextEditingController(text: e.monthlySalary.toString());
     _visitsPerDay = e.visitsPerDay;
     _offDays = List<String>.from(e.offDays);
+    _partialOffDays = Map<String, List<String>>.from(
+      e.partialOffDays.map((key, value) => MapEntry(key, List<String>.from(value)))
+    );
     _activeStatus = e.activeStatus;
     _joiningDate = DateTime.parse(e.joiningDate);
   }
@@ -79,6 +83,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       monthlySalary: double.parse(_salaryController.text.trim()),
       visitsPerDay: _visitsPerDay,
       offDays: _offDays,
+      partialOffDays: _partialOffDays,
       createdDate: widget.employee.createdDate,
       joiningDate: _joiningDate.toIso8601String(),
       activeStatus: _activeStatus,
@@ -643,7 +648,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Weekly Off Days',
+          'Weekly Off Schedule',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
@@ -651,119 +656,209 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Select at least one day off per week',
-          style: TextStyle(
+        Text(
+          _visitsPerDay == 1 
+            ? 'Select full day offs (optional)' 
+            : 'Select morning/evening offs (optional)',
+          style: const TextStyle(
             fontSize: 12,
             color: Color(0xFF9CA3AF),
           ),
         ),
         const SizedBox(height: 16),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final isMobile = MediaQuery.of(context).size.width < 600;
-            
-            if (isMobile) {
-              return Column(
-                children: _daysOfWeek.map((day) => _buildDayOption(day)).toList(),
-              );
-            } else {
-              List<Widget> rows = [];
-              for (int i = 0; i < _daysOfWeek.length; i += 2) {
-                final firstDay = _daysOfWeek[i];
-                final secondDay = i + 1 < _daysOfWeek.length ? _daysOfWeek[i + 1] : null;
-                
-                rows.add(
-                  Row(
-                    children: [
-                      Expanded(child: _buildDayOption(firstDay)),
-                      if (secondDay != null)
-                        Expanded(child: _buildDayOption(secondDay))
-                      else
-                        const Expanded(child: SizedBox()),
-                    ],
-                  ),
-                );
-              }
-              return Column(children: rows);
-            }
-          },
-        ),
-        if (_offDays.isEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFEF2F2),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.3)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.warning_amber, size: 16, color: Color(0xFFEF4444)),
-                SizedBox(width: 8),
-                Text(
-                  'Please select at least one off day',
-                  style: TextStyle(fontSize: 12, color: Color(0xFFEF4444)),
-                ),
-              ],
-            ),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
           ),
+          child: Column(
+            children: _daysOfWeek.asMap().entries.map((entry) {
+              final index = entry.key;
+              final day = entry.value;
+              final isLast = index == _daysOfWeek.length - 1;
+              return Column(
+                children: [
+                  _buildDayOffOption(day),
+                  if (!isLast) const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F9FF),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF0EA5E9).withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, size: 16, color: Color(0xFF0EA5E9)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'No off selected means employee works all shifts',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF0EA5E9)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildDayOption(String day) {
-    final isSelected = _offDays.contains(day);
+  Widget _buildDayOffOption(String day) {
+    final isFullOff = _offDays.contains(day);
+    final partialOffs = _partialOffDays[day] ?? [];
+    final hasMorningOff = partialOffs.contains('morning');
+    final hasEveningOff = partialOffs.contains('evening');
+    
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              day,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF374151),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 4,
+            child: _visitsPerDay == 1 
+              ? _buildSingleVisitOptions(day, isFullOff)
+              : _buildDoubleVisitOptions(day, hasMorningOff, hasEveningOff, partialOffs),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSingleVisitOptions(String day, bool isFullOff) {
     return InkWell(
       onTap: () {
         setState(() {
-          if (isSelected) {
+          if (isFullOff) {
             _offDays.remove(day);
           } else {
             _offDays.add(day);
+            // Remove any partial offs if full day is selected
+            _partialOffDays.remove(day);
           }
         });
       },
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(6),
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF6366F1).withOpacity(0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
+          color: isFullOff ? const Color(0xFF6366F1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? const Color(0xFF6366F1) : const Color(0xFFE5E7EB),
+            color: isFullOff ? const Color(0xFF6366F1) : const Color(0xFFD1D5DB),
           ),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: isSelected ? const Color(0xFF6366F1) : const Color(0xFFD1D5DB),
-                ),
-              ),
-              child: isSelected
-                  ? const Icon(Icons.check, size: 12, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              day,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF374151),
-              ),
-            ),
-          ],
+        child: Text(
+          'Full Day',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: isFullOff ? Colors.white : const Color(0xFF6B7280),
+          ),
+          textAlign: TextAlign.center,
         ),
       ),
+    );
+  }
+
+  Widget _buildDoubleVisitOptions(String day, bool hasMorningOff, bool hasEveningOff, List<String> partialOffs) {
+    return Row(
+      children: [
+        // Morning Off Option
+        Expanded(
+          child: InkWell(
+            onTap: () {
+              setState(() {
+                if (hasMorningOff) {
+                  _partialOffDays[day]?.remove('morning');
+                  if (_partialOffDays[day]?.isEmpty ?? false) {
+                    _partialOffDays.remove(day);
+                  }
+                } else {
+                  _partialOffDays[day] = [...partialOffs, 'morning'];
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+              decoration: BoxDecoration(
+                color: hasMorningOff ? const Color(0xFF10B981) : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: hasMorningOff ? const Color(0xFF10B981) : const Color(0xFFD1D5DB),
+                ),
+              ),
+              child: Text(
+                'AM',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: hasMorningOff ? Colors.white : const Color(0xFF6B7280),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        // Evening Off Option
+        Expanded(
+          child: InkWell(
+            onTap: () {
+              setState(() {
+                if (hasEveningOff) {
+                  _partialOffDays[day]?.remove('evening');
+                  if (_partialOffDays[day]?.isEmpty ?? false) {
+                    _partialOffDays.remove(day);
+                  }
+                } else {
+                  _partialOffDays[day] = [...partialOffs, 'evening'];
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+              decoration: BoxDecoration(
+                color: hasEveningOff ? const Color(0xFFF59E0B) : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: hasEveningOff ? const Color(0xFFF59E0B) : const Color(0xFFD1D5DB),
+                ),
+              ),
+              child: Text(
+                'PM',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: hasEveningOff ? Colors.white : const Color(0xFF6B7280),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -885,15 +980,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
         color: _isSaving ? const Color(0xFFE5E7EB) : null,
       ),
       child: ElevatedButton(
-        onPressed: _isSaving
-            ? null
-            : () {
-                if (_offDays.isEmpty) {
-                  setState(() {});
-                  return;
-                }
-                _submitForm();
-              },
+        onPressed: _isSaving ? null : _submitForm,
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
