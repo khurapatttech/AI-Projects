@@ -12,7 +12,6 @@ class AttendanceScreen extends StatefulWidget {
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
-  late Future<List<Employee>> _employeesFuture;
   late DateTime _selectedDate;
   final List<DateTime> _dateOptions = List.generate(3, (i) => DateTime.now().subtract(Duration(days: i)));
 
@@ -21,25 +20,60 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Map<String, TextEditingController> _commentControllers = {};
   Map<String, String> _editStatus = {};
 
+  // Cache for attendance data to avoid redundant database calls
+  Map<String, List<Attendance>> _attendanceCache = {};
+  List<Employee> _cachedEmployees = [];
+  String _lastLoadedDate = '';
+
   String _key(Employee e, String shiftType) => '${e.id}_$shiftType';
 
   @override
   void initState() {
     super.initState();
     _selectedDate = _dateOptions[0];
-    _loadEmployees();
+    _loadData(); // Load initial data
   }
 
-  void _loadEmployees() {
-    setState(() {
-      _employeesFuture = DatabaseService().getAllEmployees();
-    });
+  // Optimized data loading with caching
+  Future<void> _loadData({bool forceRefresh = false}) async {
+    final dateString = _selectedDateString;
+    
+    // Check if we need to reload data
+    if (!forceRefresh && 
+        _lastLoadedDate == dateString && 
+        _cachedEmployees.isNotEmpty && 
+        _attendanceCache.containsKey(dateString)) {
+      return; // Use cached data
+    }
+
+    try {
+      // Load employees and attendance data in parallel
+      final results = await Future.wait([
+        DatabaseService().getAllEmployees(),
+        DatabaseService().getAllAttendance(),
+      ]);
+
+      final employees = results[0] as List<Employee>;
+      final allAttendance = results[1] as List<Attendance>;
+
+      // Cache the data
+      _cachedEmployees = employees;
+      _attendanceCache[dateString] = allAttendance
+          .where((att) => att.date == dateString)
+          .toList();
+      _lastLoadedDate = dateString;
+
+      // Trigger UI rebuild
+      setState(() {});
+    } catch (e) {
+      print('Error loading data: $e');
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _loadEmployees(); // Refresh employee list when page is shown
+    _loadData(forceRefresh: true); // Refresh data when page is shown
   }
 
   @override
@@ -52,15 +86,37 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
 
   String get _selectedDateString => DateFormat('yyyy-MM-dd').format(_selectedDate);
 
-  Future<Attendance?> _getAttendance(Employee e, String shiftType) async {
-    final db = DatabaseService();
-    final all = await db.getAllAttendance();
+  // Optimized attendance lookup using cache
+  Attendance? _getCachedAttendance(Employee e, String shiftType) {
+    final dateString = _selectedDateString;
+    final attendanceList = _attendanceCache[dateString] ?? [];
+    
     try {
-      return all.firstWhere(
-        (a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == shiftType,
+      return attendanceList.firstWhere(
+        (a) => a.employeeId == e.id && a.shiftType == shiftType,
       );
     } catch (e) {
       return null;
+    }
+  }
+
+  // Update cache when attendance is saved
+  void _updateAttendanceCache(Attendance attendance) {
+    final dateString = attendance.date;
+    if (!_attendanceCache.containsKey(dateString)) {
+      _attendanceCache[dateString] = [];
+    }
+    
+    final attendanceList = _attendanceCache[dateString]!;
+    final existingIndex = attendanceList.indexWhere(
+      (a) => a.employeeId == attendance.employeeId && 
+             a.shiftType == attendance.shiftType,
+    );
+    
+    if (existingIndex >= 0) {
+      attendanceList[existingIndex] = attendance;
+    } else {
+      attendanceList.add(attendance);
     }
   }
 
@@ -72,33 +128,6 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   bool _isWithinCorrectionWindow() {
     final now = DateTime.now();
     return now.difference(_selectedDate).inDays <= 2 && !now.isBefore(_selectedDate);
-  }
-
-  bool _isMorningWindow() {
-    final now = DateTime.now();
-    if (!_isToday()) return true; // allow anytime for past days
-    return now.hour < 11 || (now.hour == 11 && now.minute <= 50);
-  }
-
-  bool _isEveningWindow() {
-    final now = DateTime.now();
-    if (!_isToday()) return true; // allow anytime for past days
-    return now.hour >= 15;
-  }
-
-  bool _isToday() {
-    final now = DateTime.now();
-    return now.year == _selectedDate.year && now.month == _selectedDate.month && now.day == _selectedDate.day;
-  }
-
-  void _startEdit(Employee e, String shiftType, Attendance? att) {
-    final key = _key(e, shiftType);
-    setState(() {
-      _editMode[key] = true;
-      _commentControllers[key]?.dispose();
-      _commentControllers[key] = TextEditingController(text: att?.comments ?? '');
-      _editStatus[key] = att?.status ?? 'present';
-    });
   }
 
   void _cancelEdit(Employee e, String shiftType) {
@@ -116,16 +145,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final now = DateTime.now();
     final comment = _commentControllers[key]?.text.trim() ?? '';
     final status = _editStatus[key] ?? 'present';
-    // Always check for existing attendance before insert/update
-    Attendance? current;
-    try {
-      final all = await DatabaseService().getAllAttendance();
-      current = all.firstWhere(
-        (a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == shiftType,
-      );
-    } catch (_) {
-      current = null;
-    }
+    
+    // Use cached data instead of database call
+    Attendance? current = _getCachedAttendance(e, shiftType);
+    
     final attendance = Attendance(
       id: current?.id ?? existing?.id,
       employeeId: e.id!,
@@ -140,12 +163,17 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       createdAt: current?.createdAt ?? existing?.createdAt ?? now.toIso8601String(),
       updatedAt: now.toIso8601String(),
     );
+    
     try {
       if (current == null && existing == null) {
         await DatabaseService().insertAttendance(attendance);
       } else {
         await DatabaseService().updateAttendance(attendance);
       }
+      
+      // Update cache immediately to avoid database call
+      _updateAttendanceCache(attendance);
+      
       if (!mounted) return;
       setState(() {
         _editMode[key] = false;
@@ -155,6 +183,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       });
     } catch (e) {
       // Optionally, you can show an error dialog or print the error
+      print('Error saving attendance: $e');
     }
   }
 
@@ -166,10 +195,119 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     return Colors.orange; // pending
   }
 
+  // Optimized method to get employee's overall status for the day
+  String? _getEmployeeOverallStatus(Employee e) {
+    if (e.visitsPerDay == 1) {
+      return _getCachedAttendance(e, 'full_day')?.status;
+    } else {
+      final morning = _getCachedAttendance(e, 'morning')?.status;
+      final evening = _getCachedAttendance(e, 'evening')?.status;
+      
+      // If both are present, return present
+      if (morning == 'present' && evening == 'present') return 'present';
+      // If any is absent, return absent
+      if (morning == 'absent' || evening == 'absent') return 'absent';
+      // If one is present and other is null, return present
+      if (morning == 'present' || evening == 'present') return 'present';
+      // If both are null, return null (pending)
+      return null;
+    }
+  }
+
   // Add a helper to get the time window label
+  // Optimized summary bar using cached data
+  Widget _buildOptimizedSummaryBar() {
+    if (_cachedEmployees.isEmpty) return const SizedBox(height: 60);
+    
+    int presentCount = 0, absentCount = 0, pendingCount = 0;
+    
+    for (final e in _cachedEmployees) {
+      if (e.visitsPerDay == 1) {
+        final att = _getCachedAttendance(e, 'full_day');
+        if (att == null) pendingCount++;
+        if (att?.status == 'present') presentCount++;
+        if (att?.status == 'absent') absentCount++;
+      } else {
+        final attM = _getCachedAttendance(e, 'morning');
+        final attE = _getCachedAttendance(e, 'evening');
+        if (attM == null) pendingCount++;
+        if (attE == null) pendingCount++;
+        if (attM?.status == 'present') presentCount++;
+        if (attE?.status == 'present') presentCount++;
+        if (attM?.status == 'absent') absentCount++;
+        if (attE?.status == 'absent') absentCount++;
+      }
+    }
+    
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: EdgeInsets.symmetric(
+        vertical: MediaQuery.of(context).size.width < 600 ? 8 : 12, 
+        horizontal: 16
+      ),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blue.shade100),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = MediaQuery.of(context).size.width < 600;
+          final fontSize = isMobile ? 16.0 : 18.0;
+          final labelFontSize = isMobile ? 10.0 : 12.0;
+          
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Text('${_cachedEmployees.length}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.blue)),
+                    Text('Total Staff', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text('$presentCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.green)),
+                    Text('Present', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text('$absentCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.red)),
+                    Text('Absent', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text('$pendingCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.orange)),
+                    Text('Pending', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   String _shiftTimeLabel(String shiftType) {
-    if (shiftType == 'morning') return '7:00-11:50 AM';
-    if (shiftType == 'evening') return '3:00-8:00 PM';
+    switch (shiftType) {
+      case 'full_day':
+        return '9:00 AM - 6:00 PM';
+      case 'morning':
+        return '7:00 AM - 11:50 AM';
+      case 'evening':
+        return '3:00 PM - 9:00 PM';
+    }
     return 'Full Day';
   }
 
@@ -251,7 +389,32 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(e.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Text(e.visitsPerDay == 2 ? 'Twice Daily' : 'Daily', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            Row(
+                              children: [
+                                Text(e.visitsPerDay == 2 ? 'Twice Daily' : 'Daily', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                const SizedBox(width: 8),
+                                // Quick status indicator to show current status at a glance
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _statusColor(_getEmployeeOverallStatus(e)).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: _statusColor(_getEmployeeOverallStatus(e)),
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _getEmployeeOverallStatus(e) ?? 'Pending',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                      color: _statusColor(_getEmployeeOverallStatus(e)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
@@ -259,7 +422,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                         width: 14,
                         height: 14,
                         decoration: BoxDecoration(
-                          color: _statusColor(e.visitsPerDay == 1 ? attFull?.status : (attMorning?.status ?? attEvening?.status)),
+                          color: _statusColor(_getEmployeeOverallStatus(e)),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -284,137 +447,299 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     final commentController = _commentControllers[key] ?? TextEditingController(text: att?.comments ?? '');
     if (_commentControllers[key] == null) _commentControllers[key] = commentController;
     final status = inEdit ? (_editStatus[key] ?? att?.status ?? 'present') : att?.status;
-    // Fix: Always allow marking if within correction window and not off day, even if att is null (new employee)
-    final allowMarking = canEdit && (att == null || inEdit);
+    
+    // Simplified logic: Allow marking if within 2-day window (regardless of existing attendance)
+    final allowMarking = canEdit;
     
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = MediaQuery.of(context).size.width < 600;
-        final padding = isMobile ? 10.0 : 12.0;
-        final fontSize = isMobile ? 12.0 : 13.0;
-        final timeFontSize = isMobile ? 10.0 : 11.0;
-        final buttonPadding = isMobile ? 8.0 : 12.0;
+        final padding = isMobile ? 12.0 : 16.0;
+        final fontSize = isMobile ? 13.0 : 14.0;
+        final timeFontSize = isMobile ? 11.0 : 12.0;
         
         return Container(
           decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(8),
+            color: status == 'present' 
+                ? Colors.green.shade50
+                : status == 'absent' 
+                    ? Colors.red.shade50 
+                    : Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: status == 'present' 
+                  ? Colors.green.shade200
+                  : status == 'absent' 
+                      ? Colors.red.shade200 
+                      : Colors.grey.shade200,
+              width: 1,
+            ),
           ),
-          margin: EdgeInsets.only(top: padding),
+          margin: EdgeInsets.only(top: padding * 0.5),
           padding: EdgeInsets.all(padding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header Row - More compact and informative
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  // Status Icon
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: status == 'present' 
+                          ? Colors.green 
+                          : status == 'absent' 
+                              ? Colors.red 
+                              : Colors.grey.shade400,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      status == 'present' 
+                          ? Icons.check 
+                          : status == 'absent' 
+                              ? Icons.close 
+                              : Icons.schedule,
+                      color: Colors.white,
+                      size: isMobile ? 12 : 14,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  
+                  // Shift Info
                   Expanded(
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.black87)),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(timeLabel, style: TextStyle(fontSize: timeFontSize, color: Colors.grey), overflow: TextOverflow.ellipsis),
+                        Text(
+                          label, 
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600, 
+                            fontSize: fontSize, 
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          timeLabel, 
+                          style: TextStyle(
+                            fontSize: timeFontSize, 
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ],
                     ),
                   ),
+                  
+                  // Status Badge - More compact
                   if (status != null)
-                    Chip(
-                      label: Text(status),
-                      backgroundColor: status == 'present' ? Colors.green.shade100 : Colors.red.shade100,
-                      avatar: Icon(
-                        status == 'present' ? Icons.check_circle : Icons.cancel,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
                         color: status == 'present' ? Colors.green : Colors.red,
-                        size: isMobile ? 14 : 16,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      labelStyle: TextStyle(fontSize: isMobile ? 10 : 12),
+                      child: Text(
+                        status.toUpperCase(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isMobile ? 9 : 10,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
                     ),
                 ],
               ),
-              const SizedBox(height: 8),
-              if (allowMarking)
-                Wrap(
-                  spacing: isMobile ? 6 : 8,
-                  runSpacing: 4,
-                  children: [
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: status == 'present' ? Colors.green : Colors.grey.shade200,
-                        foregroundColor: status == 'present' ? Colors.white : Colors.black87,
-                        padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        minimumSize: Size(isMobile ? 70 : 80, isMobile ? 32 : 36),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _editStatus[key] = 'present';
-                          _editMode[key] = true;
-                        });
-                      },
-                      child: Text('Present', style: TextStyle(fontSize: isMobile ? 11 : 12)),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: status == 'absent' ? Colors.red : Colors.grey.shade200,
-                        foregroundColor: status == 'absent' ? Colors.white : Colors.black87,
-                        padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        minimumSize: Size(isMobile ? 70 : 80, isMobile ? 32 : 36),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _editStatus[key] = 'absent';
-                          _editMode[key] = true;
-                        });
-                      },
-                      child: Text('Absent', style: TextStyle(fontSize: isMobile ? 11 : 12)),
-                    ),
-                    if (inEdit) ...[
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          minimumSize: Size(isMobile ? 60 : 70, isMobile ? 32 : 36),
+              
+              // Action Buttons - Optimized layout
+              if (allowMarking) ...[
+                const SizedBox(height: 12),
+                if (!inEdit)
+                  // Quick toggle buttons when not editing
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          label: 'Present',
+                          isSelected: status == 'present',
+                          color: Colors.green,
+                          icon: Icons.check_circle_outline,
+                          onTap: () {
+                            setState(() {
+                              _editStatus[key] = 'present';
+                              _editMode[key] = true;
+                            });
+                          },
+                          isMobile: isMobile,
                         ),
-                        onPressed: () => _saveAttendance(e, shiftType, att),
-                        child: Text('Save', style: TextStyle(fontSize: isMobile ? 11 : 12)),
                       ),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey.shade300,
-                          foregroundColor: Colors.black87,
-                          padding: EdgeInsets.symmetric(horizontal: buttonPadding, vertical: buttonPadding * 0.75),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          minimumSize: Size(isMobile ? 60 : 70, isMobile ? 32 : 36),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildQuickActionButton(
+                          label: 'Absent',
+                          isSelected: status == 'absent',
+                          color: Colors.red,
+                          icon: Icons.cancel_outlined,
+                          onTap: () {
+                            setState(() {
+                              _editStatus[key] = 'absent';
+                              _editMode[key] = true;
+                            });
+                          },
+                          isMobile: isMobile,
                         ),
-                        onPressed: () => _cancelEdit(e, shiftType),
-                        child: Text('Cancel', style: TextStyle(fontSize: isMobile ? 11 : 12)),
                       ),
                     ],
-                  ],
-                ),
+                  )
+                else
+                  // Full edit mode with save/cancel
+                  Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildQuickActionButton(
+                              label: 'Present',
+                              isSelected: _editStatus[key] == 'present',
+                              color: Colors.green,
+                              icon: Icons.check_circle,
+                              onTap: () {
+                                setState(() {
+                                  _editStatus[key] = 'present';
+                                });
+                              },
+                              isMobile: isMobile,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildQuickActionButton(
+                              label: 'Absent',
+                              isSelected: _editStatus[key] == 'absent',
+                              color: Colors.red,
+                              icon: Icons.cancel,
+                              onTap: () {
+                                setState(() {
+                                  _editStatus[key] = 'absent';
+                                });
+                              },
+                              isMobile: isMobile,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: isMobile ? 10 : 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () => _saveAttendance(e, shiftType, att),
+                              icon: Icon(Icons.save, size: isMobile ? 16 : 18),
+                              label: Text('Save', style: TextStyle(fontSize: isMobile ? 12 : 13)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.grey.shade700,
+                                padding: EdgeInsets.symmetric(vertical: isMobile ? 10 : 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              onPressed: () => _cancelEdit(e, shiftType),
+                              icon: Icon(Icons.close, size: isMobile ? 16 : 18),
+                              label: Text('Cancel', style: TextStyle(fontSize: isMobile ? 12 : 13)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+              ],
+              
+              // Comments Section - Only when editing
               if (inEdit) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: commentController,
                   decoration: InputDecoration(
-                    labelText: 'Comments',
-                    border: const OutlineInputBorder(),
-                    contentPadding: EdgeInsets.all(isMobile ? 8 : 12),
-                    labelStyle: TextStyle(fontSize: isMobile ? 12 : 14),
+                    labelText: 'Add notes (optional)',
+                    hintText: 'e.g., Late arrival, sick leave...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Colors.blue, width: 2),
+                    ),
+                    contentPadding: EdgeInsets.all(isMobile ? 10 : 12),
+                    labelStyle: TextStyle(fontSize: isMobile ? 12 : 13),
+                    prefixIcon: Icon(Icons.note_add, size: isMobile ? 18 : 20),
                   ),
-                  style: TextStyle(fontSize: isMobile ? 12 : 14),
+                  style: TextStyle(fontSize: isMobile ? 12 : 13),
                   maxLines: 2,
-                  enabled: inEdit || status == null,
                 ),
               ],
             ],
           ),
         );
       },
+    );
+  }
+  
+  // Helper method for consistent action buttons
+  Widget _buildQuickActionButton({
+    required String label,
+    required bool isSelected,
+    required Color color,
+    required IconData icon,
+    required VoidCallback onTap,
+    required bool isMobile,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          vertical: isMobile ? 10 : 12,
+          horizontal: isMobile ? 8 : 12,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? color : color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: color,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? Colors.white : color,
+              size: isMobile ? 16 : 18,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : color,
+                fontSize: isMobile ? 11 : 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -430,111 +755,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       ),
       body: Column(
         children: [
-          // Summary bar
-          FutureBuilder<List<Employee>>(
-            future: _employeesFuture,
-            builder: (context, empSnap) {
-              if (!empSnap.hasData) return const SizedBox(height: 60);
-              final employees = empSnap.data!;
-              return FutureBuilder<List<Attendance>>(
-                future: DatabaseService().getAllAttendance(),
-                builder: (context, attSnap) {
-                  if (!attSnap.hasData) return const SizedBox(height: 60);
-                  final allAtt = attSnap.data!;
-                  int presentCount = 0, absentCount = 0, pendingCount = 0;
-                  for (final e in employees) {
-                    if (e.visitsPerDay == 1) {
-                      Attendance? att;
-                      try {
-                        att = allAtt.firstWhere((a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == 'full_day');
-                      } catch (_) {
-                        att = null;
-                      }
-                      if (att == null) pendingCount++;
-                      if (att?.status == 'present') presentCount++;
-                      if (att?.status == 'absent') absentCount++;
-                    } else {
-                      Attendance? attM, attE;
-                      try {
-                        attM = allAtt.firstWhere((a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == 'morning');
-                      } catch (_) {
-                        attM = null;
-                      }
-                      try {
-                        attE = allAtt.firstWhere((a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == 'evening');
-                      } catch (_) {
-                        attE = null;
-                      }
-                      if (attM == null) pendingCount++;
-                      if (attE == null) pendingCount++;
-                      if (attM?.status == 'present') presentCount++;
-                      if (attE?.status == 'present') presentCount++;
-                      if (attM?.status == 'absent') absentCount++;
-                      if (attE?.status == 'absent') absentCount++;
-                    }
-                  }
-                  return Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: EdgeInsets.symmetric(
-                      vertical: MediaQuery.of(context).size.width < 600 ? 8 : 12, 
-                      horizontal: 16
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.shade100),
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final isMobile = MediaQuery.of(context).size.width < 600;
-                        final fontSize = isMobile ? 16.0 : 18.0;
-                        final labelFontSize = isMobile ? 10.0 : 12.0;
-                        
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text('${employees.length}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.blue)),
-                                  Text('Total Staff', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text('$presentCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.green)),
-                                  Text('Present', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text('$absentCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.red)),
-                                  Text('Absent', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text('$pendingCount', style: TextStyle(fontWeight: FontWeight.bold, fontSize: fontSize, color: Colors.orange)),
-                                  Text('Pending', style: TextStyle(fontSize: labelFontSize), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  );
-                },
-              );
-            },
-          ),
+          // Summary bar - optimized with cached data
+          _buildOptimizedSummaryBar(),
           // Date selector
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
@@ -568,7 +790,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
                       selected: _selectedDate == d,
                       selectedColor: Colors.blue.shade100,
                       onSelected: (selected) {
-                        if (selected) setState(() => _selectedDate = d);
+                        if (selected) {
+                          setState(() => _selectedDate = d);
+                          _loadData(); // Load data for new date
+                        }
                       },
                     ),
                   );
@@ -576,51 +801,28 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
               ),
             ),
           ),
-          // Employee cards
+          // Employee cards - optimized with cached data
           Expanded(
-            child: FutureBuilder<List<Employee>>(
-              future: _employeesFuture,
-              builder: (context, empSnap) {
-                if (!empSnap.hasData) return const Center(child: CircularProgressIndicator());
-                final employees = empSnap.data!;
-                return FutureBuilder<List<Attendance>>(
-                  future: DatabaseService().getAllAttendance(),
-                  builder: (context, attSnap) {
-                    if (!attSnap.hasData) return const SizedBox.shrink();
-                    final allAtt = attSnap.data!;
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      itemCount: employees.length,
-                      itemBuilder: (context, index) {
-                        final e = employees[index];
-                        Attendance? attFull, attMorning, attEvening;
-                        try {
-                          attFull = allAtt.firstWhere((a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == 'full_day');
-                        } catch (_) {
-                          attFull = null;
-                        }
-                        try {
-                          attMorning = allAtt.firstWhere((a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == 'morning');
-                        } catch (_) {
-                          attMorning = null;
-                        }
-                        try {
-                          attEvening = allAtt.firstWhere((a) => a.employeeId == e.id && a.date == _selectedDateString && a.shiftType == 'evening');
-                        } catch (_) {
-                          attEvening = null;
-                        }
-                        final isOff = _isOffDay(e);
-                        final canEdit = _isWithinCorrectionWindow() && !isOff;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _employeeAttendanceCardModern(e, attFull, attMorning, attEvening, canEdit, isOff),
-                        );
-                      },
+            child: _cachedEmployees.isEmpty 
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: _cachedEmployees.length,
+                  itemBuilder: (context, index) {
+                    final e = _cachedEmployees[index];
+                    // Use cached attendance data instead of database calls
+                    final attFull = _getCachedAttendance(e, 'full_day');
+                    final attMorning = _getCachedAttendance(e, 'morning');
+                    final attEvening = _getCachedAttendance(e, 'evening');
+                    
+                    final isOff = _isOffDay(e);
+                    final canEdit = _isWithinCorrectionWindow() && !isOff;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _employeeAttendanceCardModern(e, attFull, attMorning, attEvening, canEdit, isOff),
                     );
                   },
-                );
-              },
-            ),
+                ),
           ),
         ],
       ),

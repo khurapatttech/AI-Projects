@@ -54,4 +54,30 @@ class Employee {
       activeStatus: map['active_status'] == 1,
     );
   }
+
+  Employee copyWith({
+    int? id,
+    String? name,
+    int? age,
+    String? phone,
+    String? email,
+    double? monthlySalary,
+    int? visitsPerDay,
+    List<String>? offDays,
+    String? createdDate,
+    bool? activeStatus,
+  }) {
+    return Employee(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      age: age ?? this.age,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      monthlySalary: monthlySalary ?? this.monthlySalary,
+      visitsPerDay: visitsPerDay ?? this.visitsPerDay,
+      offDays: offDays ?? this.offDays,
+      createdDate: createdDate ?? this.createdDate,
+      activeStatus: activeStatus ?? this.activeStatus,
+    );
+  }
 } 
