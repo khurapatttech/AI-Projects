@@ -194,6 +194,17 @@ class DatabaseService {
     return maps.map((e) => Attendance.fromMap(e)).toList();
   }
 
+  Future<List<Attendance>> getAttendanceForEmployeeAndDate(int employeeId, DateTime date) async {
+    final db = await database;
+    final dateString = date.toIso8601String().split('T')[0]; // Get YYYY-MM-DD format
+    final maps = await db.query(
+      'attendance',
+      where: 'employee_id = ? AND date = ?',
+      whereArgs: [employeeId, dateString],
+    );
+    return maps.map((e) => Attendance.fromMap(e)).toList();
+  }
+
   Future<int> updateAttendance(Attendance attendance) async {
     final db = await database;
     final now = DateTime.now().toIso8601String();

@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'screens/employees/employees_screen.dart';
 import 'screens/attendance/attendance_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/reports/reports_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -167,8 +168,6 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
-
-  static final List<Widget> _screens = <Widget>[];
   
   List<Widget> _getScreens() {
     return [
@@ -176,10 +175,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onNavigateToAttendance: () => _onItemTapped(1),
         onNavigateToEmployees: () => _onItemTapped(2),
       ),
-      AttendanceScreen(),
-      EmployeesScreen(),
-      Center(child: Text('Reports Screen', style: TextStyle(fontSize: 24))),
-      Center(child: Text('Settings Screen', style: TextStyle(fontSize: 24))),
+      const AttendanceScreen(),
+      const EmployeesScreen(),
+      const ReportsScreen(),
+      const Center(child: Text('Settings Screen', style: TextStyle(fontSize: 24))),
     ];
   }
 
