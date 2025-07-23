@@ -288,7 +288,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                         const SizedBox(height: 20),
                         _buildJoiningDateField(),
                         const SizedBox(height: 24),
-                        _buildVisitsSection(),
+                        _buildVisitsDisplaySection(),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -298,7 +298,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
                       title: 'Schedule Information',
                       icon: Icons.schedule,
                       children: [
-                        _buildOffDaysSection(),
+                        _buildOffDaysDisplaySection(),
                       ],
                     ),
                     const SizedBox(height: 24),
@@ -541,7 +541,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     );
   }
 
-  Widget _buildVisitsSection() {
+  Widget _buildVisitsDisplaySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -553,97 +553,73 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
             color: Color(0xFF374151),
           ),
         ),
+        const SizedBox(height: 8),
+        const Text(
+          'This setting cannot be changed after employee creation',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF9CA3AF),
+          ),
+        ),
         const SizedBox(height: 12),
         Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
+            color: const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE5E7EB)),
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isMobile = MediaQuery.of(context).size.width < 600;
-              
-              if (isMobile) {
-                return Column(
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366F1).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  _visitsPerDay == 1 ? Icons.looks_one : Icons.looks_two,
+                  color: const Color(0xFF6366F1),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildVisitOption(1, '1 visit per day', 'Single daily visit'),
-                    const Divider(height: 1, color: Color(0xFFE5E7EB)),
-                    _buildVisitOption(2, '2 visits per day', 'Morning and evening visits'),
+                    Text(
+                      _visitsPerDay == 1 ? '1 visit per day' : '2 visits per day',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                    Text(
+                      _visitsPerDay == 1 ? 'Single daily visit' : 'Morning and evening visits',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                    ),
                   ],
-                );
-              } else {
-                return IntrinsicHeight(
-                  child: Row(
-                    children: [
-                      Expanded(child: _buildVisitOption(1, '1 visit', 'Single daily visit')),
-                      const VerticalDivider(width: 1, color: Color(0xFFE5E7EB)),
-                      Expanded(child: _buildVisitOption(2, '2 visits', 'Morning & evening')),
-                    ],
-                  ),
-                );
-              }
-            },
+                ),
+              ),
+              Icon(
+                Icons.lock_outline,
+                color: const Color(0xFF9CA3AF),
+                size: 16,
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildVisitOption(int value, String title, String subtitle) {
-    final isSelected = _visitsPerDay == value;
-    return InkWell(
-      onTap: () => setState(() => _visitsPerDay = value),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? const Color(0xFF6366F1) : const Color(0xFFD1D5DB),
-                  width: 2,
-                ),
-                color: isSelected ? const Color(0xFF6366F1) : Colors.transparent,
-              ),
-              child: isSelected
-                  ? const Icon(Icons.check, size: 12, color: Colors.white)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF374151),
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF9CA3AF),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOffDaysSection() {
+  Widget _buildOffDaysDisplaySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -656,34 +632,46 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          _visitsPerDay == 1 
-            ? 'Select full day offs (optional)' 
-            : 'Select morning/evening offs (optional)',
-          style: const TextStyle(
+        const Text(
+          'This schedule cannot be changed after employee creation',
+          style: TextStyle(
             fontSize: 12,
             color: Color(0xFF9CA3AF),
           ),
         ),
         const SizedBox(height: 16),
         Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFFF9FAFB),
+            color: const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE5E7EB)),
           ),
           child: Column(
-            children: _daysOfWeek.asMap().entries.map((entry) {
-              final index = entry.key;
-              final day = entry.value;
-              final isLast = index == _daysOfWeek.length - 1;
-              return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  _buildDayOffOption(day),
-                  if (!isLast) const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                  Icon(
+                    Icons.lock_outline,
+                    color: const Color(0xFF9CA3AF),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Current Schedule',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
                 ],
-              );
-            }).toList(),
+              ),
+              const SizedBox(height: 16),
+              ..._daysOfWeek.map((day) => _buildDayOffDisplay(day)),
+            ],
           ),
         ),
         const SizedBox(height: 12),
@@ -700,7 +688,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'No off selected means employee works all shifts',
+                  'To modify the schedule, please create a new employee profile',
                   style: const TextStyle(fontSize: 12, color: Color(0xFF0EA5E9)),
                 ),
               ),
@@ -711,14 +699,40 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
     );
   }
 
-  Widget _buildDayOffOption(String day) {
+  Widget _buildDayOffDisplay(String day) {
     final isFullOff = _offDays.contains(day);
     final partialOffs = _partialOffDays[day] ?? [];
     final hasMorningOff = partialOffs.contains('morning');
     final hasEveningOff = partialOffs.contains('evening');
     
+    String statusText;
+    Color statusColor;
+    IconData statusIcon;
+    
+    if (isFullOff) {
+      statusText = 'Full Day Off';
+      statusColor = const Color(0xFF6366F1);
+      statusIcon = Icons.event_busy;
+    } else if (hasMorningOff && hasEveningOff) {
+      statusText = 'Full Day Off (AM + PM)';
+      statusColor = const Color(0xFF6366F1);
+      statusIcon = Icons.event_busy;
+    } else if (hasMorningOff) {
+      statusText = 'Morning Off';
+      statusColor = const Color(0xFF10B981);
+      statusIcon = Icons.wb_sunny_outlined;
+    } else if (hasEveningOff) {
+      statusText = 'Evening Off';
+      statusColor = const Color(0xFFF59E0B);
+      statusIcon = Icons.nights_stay_outlined;
+    } else {
+      statusText = 'Working Day';
+      statusColor = const Color(0xFF64748B);
+      statusIcon = Icons.work_outline;
+    }
+    
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
           Expanded(
@@ -726,7 +740,7 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
             child: Text(
               day,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF374151),
               ),
@@ -734,131 +748,28 @@ class _EmployeeEditScreenState extends State<EmployeeEditScreen> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            flex: 4,
-            child: _visitsPerDay == 1 
-              ? _buildSingleVisitOptions(day, isFullOff)
-              : _buildDoubleVisitOptions(day, hasMorningOff, hasEveningOff, partialOffs),
+            flex: 3,
+            child: Row(
+              children: [
+                Icon(
+                  statusIcon,
+                  size: 14,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: statusColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildSingleVisitOptions(String day, bool isFullOff) {
-    return InkWell(
-      onTap: () {
-        setState(() {
-          if (isFullOff) {
-            _offDays.remove(day);
-          } else {
-            _offDays.add(day);
-            // Remove any partial offs if full day is selected
-            _partialOffDays.remove(day);
-          }
-        });
-      },
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        decoration: BoxDecoration(
-          color: isFullOff ? const Color(0xFF6366F1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isFullOff ? const Color(0xFF6366F1) : const Color(0xFFD1D5DB),
-          ),
-        ),
-        child: Text(
-          'Full Day',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: isFullOff ? Colors.white : const Color(0xFF6B7280),
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDoubleVisitOptions(String day, bool hasMorningOff, bool hasEveningOff, List<String> partialOffs) {
-    return Row(
-      children: [
-        // Morning Off Option
-        Expanded(
-          child: InkWell(
-            onTap: () {
-              setState(() {
-                if (hasMorningOff) {
-                  _partialOffDays[day]?.remove('morning');
-                  if (_partialOffDays[day]?.isEmpty ?? false) {
-                    _partialOffDays.remove(day);
-                  }
-                } else {
-                  _partialOffDays[day] = [...partialOffs, 'morning'];
-                }
-              });
-            },
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-              decoration: BoxDecoration(
-                color: hasMorningOff ? const Color(0xFF10B981) : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: hasMorningOff ? const Color(0xFF10B981) : const Color(0xFFD1D5DB),
-                ),
-              ),
-              child: Text(
-                'AM',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: hasMorningOff ? Colors.white : const Color(0xFF6B7280),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        // Evening Off Option
-        Expanded(
-          child: InkWell(
-            onTap: () {
-              setState(() {
-                if (hasEveningOff) {
-                  _partialOffDays[day]?.remove('evening');
-                  if (_partialOffDays[day]?.isEmpty ?? false) {
-                    _partialOffDays.remove(day);
-                  }
-                } else {
-                  _partialOffDays[day] = [...partialOffs, 'evening'];
-                }
-              });
-            },
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-              decoration: BoxDecoration(
-                color: hasEveningOff ? const Color(0xFFF59E0B) : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: hasEveningOff ? const Color(0xFFF59E0B) : const Color(0xFFD1D5DB),
-                ),
-              ),
-              child: Text(
-                'PM',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: hasEveningOff ? Colors.white : const Color(0xFF6B7280),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
