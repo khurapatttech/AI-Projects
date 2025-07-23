@@ -8,11 +8,13 @@ import '../../utils/screen_size.dart';
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onNavigateToAttendance;
   final VoidCallback? onNavigateToEmployees;
+  final VoidCallback? onNavigateToPayments;
   
   const DashboardScreen({
     Key? key,
     this.onNavigateToAttendance,
     this.onNavigateToEmployees,
+    this.onNavigateToPayments,
   }) : super(key: key);
 
   @override
@@ -769,12 +771,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             label: 'Payments',
                             color: const Color(0xFF06B6D4),
                             onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Payments feature coming soon!'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
+                              if (widget.onNavigateToPayments != null) {
+                                widget.onNavigateToPayments!();
+                              }
                             },
                           ),
                         ),
@@ -840,12 +839,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             label: 'Payments',
                             color: const Color(0xFF06B6D4),
                             onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Payments feature coming soon!'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
+                              if (widget.onNavigateToPayments != null) {
+                                widget.onNavigateToPayments!();
+                              }
                             },
                           ),
                         ),

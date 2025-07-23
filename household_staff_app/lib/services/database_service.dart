@@ -7,7 +7,7 @@ import '../models/payment.dart';
 class DatabaseService {
   static Database? _database;
   static const String _databaseName = 'household_staff.db';
-  static const int _databaseVersion = 4; // Incremented to 4 for partial_off_days column
+  static const int _databaseVersion = 6; // Incremented to 5 for enhanced payment system
 
   // Singleton pattern
   static final DatabaseService _instance = DatabaseService._internal();
@@ -73,11 +73,14 @@ class DatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         employee_id INTEGER NOT NULL,
         amount REAL NOT NULL,
-        payment_type TEXT NOT NULL CHECK (payment_type IN ('salary', 'advance')),
+        payment_type TEXT NOT NULL CHECK (payment_type IN ('salary', 'advance', 'remaining', 'bonus')),
         payment_date TEXT NOT NULL,
         payment_method TEXT NOT NULL,
         notes TEXT,
         created_date TEXT NOT NULL,
+        month_year TEXT,
+        is_advance_payment INTEGER DEFAULT 0,
+        remaining_amount REAL,
         FOREIGN KEY (employee_id) REFERENCES employees (id)
       )
     ''');
@@ -115,6 +118,56 @@ class DatabaseService {
         await db.execute('ALTER TABLE employees ADD COLUMN partial_off_days TEXT DEFAULT "{}";');
       }
     }
+    
+    if (oldVersion < 5) {
+      // Add enhanced payment system columns
+      final paymentColumns = await db.rawQuery("PRAGMA table_info(payments);");
+      final paymentColumnNames = paymentColumns.map((c) => c['name']).toSet();
+      
+      if (!paymentColumnNames.contains('month_year')) {
+        await db.execute('ALTER TABLE payments ADD COLUMN month_year TEXT;');
+      }
+      if (!paymentColumnNames.contains('is_advance_payment')) {
+        await db.execute('ALTER TABLE payments ADD COLUMN is_advance_payment INTEGER DEFAULT 0;');
+      }
+      if (!paymentColumnNames.contains('remaining_amount')) {
+        await db.execute('ALTER TABLE payments ADD COLUMN remaining_amount REAL;');
+      }
+    }
+    
+    if (oldVersion < 6) {
+      // Update payment_type constraint to include 'remaining' and 'bonus'
+      // SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
+      
+      // First, get all existing payment data
+      final existingPayments = await db.query('payments');
+      
+      // Drop the old table
+      await db.execute('DROP TABLE payments');
+      
+      // Recreate the table with updated constraint
+      await db.execute('''
+        CREATE TABLE payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          employee_id INTEGER NOT NULL,
+          amount REAL NOT NULL,
+          payment_type TEXT NOT NULL CHECK (payment_type IN ('salary', 'advance', 'remaining', 'bonus')),
+          payment_date TEXT NOT NULL,
+          payment_method TEXT NOT NULL,
+          notes TEXT,
+          created_date TEXT NOT NULL,
+          month_year TEXT,
+          is_advance_payment INTEGER DEFAULT 0,
+          remaining_amount REAL,
+          FOREIGN KEY (employee_id) REFERENCES employees (id)
+        )
+      ''');
+      
+      // Restore the existing data
+      for (final payment in existingPayments) {
+        await db.insert('payments', payment);
+      }
+    }
     // Future migrations go here
   }
 
@@ -128,6 +181,20 @@ class DatabaseService {
       print('Database connection test failed: $e');
       return false;
     }
+  }
+
+  // Manually upgrade database (useful for development)
+  Future<void> manualUpgrade() async {
+    final db = await database;
+    await _onUpgrade(db, 4, 6); // Force upgrade to latest version
+  }
+
+  // Reset database (useful for development - WARNING: This will delete all data!)
+  Future<void> resetDatabase() async {
+    String path = join(await getDatabasesPath(), _databaseName);
+    await closeDatabase();
+    await deleteDatabase(path);
+    _database = null; // Force recreation on next access
   }
 
   // Close database connection
@@ -235,8 +302,139 @@ class DatabaseService {
 
   Future<List<Payment>> getAllPayments() async {
     final db = await database;
-    final maps = await db.query('payments');
+    final maps = await db.query('payments', orderBy: 'payment_date DESC');
     return maps.map((e) => Payment.fromMap(e)).toList();
+  }
+
+  Future<List<Payment>> getPaymentsByEmployee(int employeeId) async {
+    final db = await database;
+    final maps = await db.query(
+      'payments', 
+      where: 'employee_id = ?', 
+      whereArgs: [employeeId],
+      orderBy: 'payment_date DESC'
+    );
+    return maps.map((e) => Payment.fromMap(e)).toList();
+  }
+
+  Future<List<Payment>> getPaymentsByMonth(String monthYear) async {
+    final db = await database;
+    final maps = await db.query(
+      'payments', 
+      where: 'month_year = ?', 
+      whereArgs: [monthYear],
+      orderBy: 'payment_date DESC'
+    );
+    return maps.map((e) => Payment.fromMap(e)).toList();
+  }
+
+  Future<List<Payment>> getAdvancePayments(int employeeId, String monthYear) async {
+    final db = await database;
+    final maps = await db.query(
+      'payments', 
+      where: 'employee_id = ? AND month_year = ? AND payment_type = ?', 
+      whereArgs: [employeeId, monthYear, 'advance'],
+      orderBy: 'payment_date DESC'
+    );
+    return maps.map((e) => Payment.fromMap(e)).toList();
+  }
+
+  Future<double> getTotalAdvanceForMonth(int employeeId, String monthYear) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT SUM(amount) as total 
+      FROM payments 
+      WHERE employee_id = ? AND month_year = ? AND payment_type = 'advance'
+    ''', [employeeId, monthYear]);
+    return (result.first['total'] as double?) ?? 0.0;
+  }
+
+  Future<double> getTotalPaidForMonth(int employeeId, String monthYear) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT SUM(amount) as total 
+      FROM payments 
+      WHERE employee_id = ? AND month_year = ?
+    ''', [employeeId, monthYear]);
+    return (result.first['total'] as double?) ?? 0.0;
+  }
+
+  Future<List<MonthlyPaymentSummary>> getMonthlyPaymentSummaries() async {
+    final employees = await getAllEmployees();
+    final allPayments = await getAllPayments();
+    final now = DateTime.now();
+    
+    Map<String, List<MonthlyPaymentSummary>> summaries = {};
+    
+    for (final employee in employees) {
+      if (!employee.activeStatus) continue;
+      
+      // Parse employee joining date
+      final joiningDate = DateTime.parse(employee.joiningDate);
+      
+      // Get unique months from payments for this employee
+      final employeePayments = allPayments.where((p) => p.employeeId == employee.id).toList();
+      final paymentMonths = employeePayments
+          .where((p) => p.monthYear != null)
+          .map((p) => p.monthYear!)
+          .toSet()
+          .toList();
+      
+      // Generate all months from joining date to current month
+      final months = <String>[];
+      DateTime monthIterator = DateTime(joiningDate.year, joiningDate.month);
+      final currentDateTime = DateTime(now.year, now.month);
+      
+      while (monthIterator.isBefore(currentDateTime) || monthIterator.isAtSameMomentAs(currentDateTime)) {
+        final monthString = '${monthIterator.year}-${monthIterator.month.toString().padLeft(2, '0')}';
+        months.add(monthString);
+        monthIterator = DateTime(monthIterator.year, monthIterator.month + 1);
+      }
+      
+      // Also include any payment months that might be outside this range (for data consistency)
+      for (final paymentMonth in paymentMonths) {
+        if (!months.contains(paymentMonth)) {
+          months.add(paymentMonth);
+        }
+      }
+      
+      for (final month in months) {
+        final monthPayments = employeePayments.where((p) => p.monthYear == month).toList();
+        final advances = monthPayments.where((p) => p.paymentType == 'advance').toList();
+        final salaryPayments = monthPayments.where((p) => p.paymentType != 'advance').toList();
+        
+        final totalAdvances = advances.fold(0.0, (sum, p) => sum + p.amount);
+        final totalSalary = salaryPayments.fold(0.0, (sum, p) => sum + p.amount);
+        final totalPaid = totalAdvances + totalSalary;
+        final remaining = employee.monthlySalary - totalPaid;
+        
+        final summary = MonthlyPaymentSummary(
+          monthYear: month,
+          employeeId: employee.id!,
+          employeeName: employee.name,
+          monthlySalary: employee.monthlySalary,
+          totalAdvancesPaid: totalAdvances,
+          remainingAmount: remaining,
+          advances: advances,
+          salaryPayments: salaryPayments,
+          isFullyPaid: remaining <= 0,
+        );
+        
+        if (!summaries.containsKey(month)) {
+          summaries[month] = [];
+        }
+        summaries[month]!.add(summary);
+      }
+    }
+    
+    // Flatten and sort by month (newest first)
+    final allSummaries = summaries.entries
+        .expand((entry) => entry.value)
+        .toList();
+    
+    allSummaries.sort((a, b) => b.monthYear.compareTo(a.monthYear));
+    
+    return allSummaries;
   }
 
   Future<int> updatePayment(Payment payment) async {

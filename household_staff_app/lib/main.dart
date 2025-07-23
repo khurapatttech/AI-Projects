@@ -6,6 +6,7 @@ import 'screens/employees/employees_screen.dart';
 import 'screens/attendance/attendance_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/reports/reports_screen.dart';
+import 'screens/payments/payments_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +23,13 @@ void main() async {
   final dbOk = await dbService.testConnection();
   if (dbOk) {
     print('Database connection successful');
+    // Upgrade database to latest version if needed
+    try {
+      await dbService.manualUpgrade();
+      print('Database upgraded successfully');
+    } catch (e) {
+      print('Database upgrade note: $e');
+    }
   } else {
     print('Database connection failed');
   }
@@ -174,11 +182,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       DashboardScreen(
         onNavigateToAttendance: () => _onItemTapped(1),
         onNavigateToEmployees: () => _onItemTapped(2),
+        onNavigateToPayments: () => _onItemTapped(4),
       ),
       const AttendanceScreen(),
       const EmployeesScreen(),
       const ReportsScreen(),
-      const Center(child: Text('Settings Screen', style: TextStyle(fontSize: 24))),
+      const PaymentsScreen(),
     ];
   }
 
@@ -234,9 +243,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   label: 'Reports',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.settings_outlined),
-                  activeIcon: Icon(Icons.settings),
-                  label: 'Settings',
+                  icon: Icon(Icons.payment_outlined),
+                  activeIcon: Icon(Icons.payment),
+                  label: 'Payments',
                 ),
               ],
               currentIndex: _selectedIndex,
